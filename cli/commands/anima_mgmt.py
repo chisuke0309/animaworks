@@ -320,6 +320,83 @@ def cmd_anima_enable(args: argparse.Namespace) -> None:
         print(f"Enabled anima '{name}' (offline mode)")
 
 
+def cmd_anima_set_role(args: argparse.Namespace) -> None:
+    """Change an anima's role."""
+    import requests
+
+    from core.anima_factory import ROLES_DIR, VALID_ROLES, _apply_role_defaults
+    from core.paths import get_animas_dir, get_data_dir
+
+    name = args.anima
+    new_role = args.role
+    data_dir = get_data_dir()
+    animas_dir = get_animas_dir()
+    anima_dir = animas_dir / name
+    gateway_url = getattr(args, "gateway_url", None) or "http://localhost:18500"
+
+    if new_role not in VALID_ROLES:
+        print(f"Error: Invalid role '{new_role}'. Valid roles: {', '.join(sorted(VALID_ROLES))}")
+        sys.exit(1)
+
+    if not anima_dir.exists() or not (anima_dir / "identity.md").exists():
+        print(f"Error: Anima '{name}' not found (missing identity.md)")
+        sys.exit(1)
+
+    # Read current status.json
+    status_file = anima_dir / "status.json"
+    status_data: dict = {}
+    if status_file.exists():
+        try:
+            status_data = json.loads(status_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    old_role = status_data.get("role", "-")
+    status_data["role"] = new_role
+
+    if not args.status_only:
+        # Merge defaults.json values into status.json
+        defaults_path = ROLES_DIR / new_role / "defaults.json"
+        if defaults_path.is_file():
+            try:
+                role_defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+                for key in ("model", "context_threshold", "max_turns", "max_chains",
+                            "conversation_history_threshold"):
+                    if key in role_defaults:
+                        status_data[key] = role_defaults[key]
+            except Exception:
+                logger.warning("Failed to load role defaults for '%s'", new_role)
+
+    status_file.write_text(
+        json.dumps(status_data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    if not args.status_only:
+        # Re-apply role template files (specialty_prompt.md, permissions.md)
+        _apply_role_defaults(anima_dir, new_role)
+        print(f"Role changed: {old_role} → {new_role}")
+        print("  Updated: status.json, specialty_prompt.md, permissions.md")
+    else:
+        print(f"Role changed: {old_role} → {new_role} (status.json only)")
+
+    # Auto-restart if server is running and not suppressed
+    server_running = (data_dir / "server.pid").exists()
+    if server_running and not args.no_restart:
+        try:
+            response = requests.post(
+                f"{gateway_url}/api/animas/{name}/restart",
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            print(f"  Restarted '{name}' to apply new role.")
+        except Exception as e:
+            print(f"  Warning: Auto-restart failed ({e}).")
+            print(f"  Run 'animaworks anima restart {name}' to apply changes.")
+    elif not server_running:
+        print("  Changes will take effect on next server start.")
+
+
 def cmd_anima_list(args: argparse.Namespace) -> None:
     """List all animas."""
     import requests

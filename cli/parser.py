@@ -323,6 +323,26 @@ def cli_main() -> None:
     )
     p_anima_list.set_defaults(func=_lazy_anima_list)
 
+    # anima set-role
+    p_anima_set_role = anima_sub.add_parser("set-role", help="Change an anima's role")
+    p_anima_set_role.add_argument("anima", help="Anima name")
+    p_anima_set_role.add_argument(
+        "role",
+        choices=["engineer", "researcher", "manager", "writer", "ops", "general"],
+        help="New role to assign",
+    )
+    p_anima_set_role.add_argument(
+        "--status-only",
+        action="store_true",
+        help="Update status.json role field only; skip template file re-application",
+    )
+    p_anima_set_role.add_argument(
+        "--no-restart",
+        action="store_true",
+        help="Skip automatic restart after role change",
+    )
+    p_anima_set_role.set_defaults(func=_lazy_anima_set_role)
+
     # ── Logs ──────────────────────────────────────────────────
     p_logs = sub.add_parser("logs", help="View anima logs")
     p_logs.add_argument(
@@ -528,6 +548,12 @@ def _lazy_anima_list(args: argparse.Namespace) -> None:
     from cli.commands.anima_mgmt import cmd_anima_list
 
     cmd_anima_list(args)
+
+
+def _lazy_anima_set_role(args: argparse.Namespace) -> None:
+    from cli.commands.anima_mgmt import cmd_anima_set_role
+
+    cmd_anima_set_role(args)
 
 
 def _lazy_board_read(args: argparse.Namespace) -> None:

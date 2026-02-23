@@ -1077,14 +1077,16 @@ class AgentSDKExecutor(BaseExecutor):
             "force_chain": False,
         }
 
-        # execute_streaming is only used for conversation (process_message_stream).
-        # Heartbeat/cron use execute() which derives session_type from trigger.
-        session_type = "chat"
+        # Derive session_type from trigger so heartbeat/cron resume their own
+        # SDK session (current_session_heartbeat.json) rather than the chat
+        # session (current_session_chat.json).  Mirrors the logic in execute().
+        session_type = "heartbeat" if trigger in ("heartbeat",) or (trigger and trigger.startswith("cron:")) else "chat"
         session_id_to_resume = _load_session_id(self._anima_dir, session_type)
 
         options = self._build_sdk_options(
             system_prompt, _max_turns, _cw, session_stats,
             resume=session_id_to_resume,
+            include_partial_messages=True,
         )
 
         response_text: list[str] = []
@@ -1099,9 +1101,11 @@ class AgentSDKExecutor(BaseExecutor):
             client: ClaudeSDKClient,
         ) -> AsyncGenerator[dict[str, Any], None]:
             nonlocal result_message, message_count
+            got_stream_event = False
             await client.query(prompt)
             async for message in client.receive_messages():
                 if isinstance(message, StreamEvent):
+                    got_stream_event = True
                     event = message.event
                     event_type = event.get("type", "")
 
@@ -1125,6 +1129,8 @@ class AgentSDKExecutor(BaseExecutor):
                                 yield {"type": "text_delta", "text": text}
 
                 elif isinstance(message, AssistantMessage):
+                    if not got_stream_event:
+                        continue
                     message_count += 1
                     for block in message.content:
                         if isinstance(block, TextBlock):
@@ -1143,6 +1149,8 @@ class AgentSDKExecutor(BaseExecutor):
                                 }
 
                 elif isinstance(message, UserMessage):
+                    if not got_stream_event:
+                        continue
                     if isinstance(message.content, list):
                         for block in message.content:
                             if isinstance(block, ToolResultBlock):
@@ -1198,6 +1206,7 @@ class AgentSDKExecutor(BaseExecutor):
                 options = self._build_sdk_options(
                     system_prompt, _max_turns, _cw, session_stats,
                     resume=None,
+                    include_partial_messages=True,
                 )
                 try:
                     async with ClaudeSDKClient(options=options) as client:
