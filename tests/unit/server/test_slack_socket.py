@@ -10,6 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.skipif(
+    not __import__("importlib.util", fromlist=["find_spec"]).find_spec("slack_bolt"),
+    reason="slack_bolt not installed",
+)
+
 
 # ── SlackSocketModeManager ───────────────────────────────
 

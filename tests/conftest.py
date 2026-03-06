@@ -37,7 +37,8 @@ load_dotenv()
 try:
     import chromadb
     CHROMADB_AVAILABLE = True
-except ImportError:
+except Exception:
+    # Catch ImportError and also pydantic/compatibility errors (e.g. on Python 3.14)
     CHROMADB_AVAILABLE = False
 
 

@@ -362,8 +362,8 @@ class TestCreateAnimationTaskPostProcess:
     """Tests for create_animation_task extract_armature post_process parameter."""
 
     def _make_client(self):
-        with patch("core.tools.image_gen.get_credential", return_value="test-key"):
-            from core.tools.image_gen import MeshyClient
+        with patch("core.tools._image_clients.get_credential", return_value="test-key"):
+            from core.tools._image_clients import MeshyClient
             return MeshyClient()
 
     def test_includes_extract_armature(self):
@@ -395,8 +395,8 @@ class TestDownloadRiggingAnimations:
     """Tests for MeshyClient.download_rigging_animations armature preference."""
 
     def _make_client(self):
-        with patch("core.tools.image_gen.get_credential", return_value="test-key"):
-            from core.tools.image_gen import MeshyClient
+        with patch("core.tools._image_clients.get_credential", return_value="test-key"):
+            from core.tools._image_clients import MeshyClient
             return MeshyClient()
 
     def test_prefers_armature_glb_url(self):

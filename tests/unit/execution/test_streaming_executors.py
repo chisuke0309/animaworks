@@ -364,6 +364,7 @@ class FakeStreamChunk:
         delta = MagicMock()
         delta.content = text
         delta.tool_calls = tool_calls
+        delta.reasoning_content = None  # prevent MagicMock from leaking into _reasoning_parts
 
         choice = MagicMock()
         choice.delta = delta

@@ -444,7 +444,10 @@ class TestIndexerMetadataExtraction:
 
     def test_extracts_failure_tracking_fields(self, tmp_path: Path) -> None:
         """Verify that indexing picks up the new tracking fields in ChromaDB."""
-        pytest.importorskip("chromadb")
+        try:
+            import chromadb  # noqa: F401
+        except Exception:
+            pytest.skip("chromadb not available (Python 3.14 pydantic incompatibility)")
         pytest.importorskip("sentence_transformers")
 
         # Set up a full data dir structure for model loading

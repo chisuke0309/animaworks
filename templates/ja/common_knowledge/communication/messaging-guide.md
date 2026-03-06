@@ -9,6 +9,7 @@
 
 ### パラメータ一覧
 
+<!-- AUTO-GENERATED:START tool_parameters -->
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|------|------|------|
 | `to` | string | MUST | 宛先。Anima 名（例: `alice`）または人間のエイリアス（例: `user`, `taka`）。人間エイリアスは外部チャネル（Slack/Chatwork）経由で配信される |
@@ -16,6 +17,7 @@
 | `intent` | string | MUST | メッセージの意図。許可値: `report`（進捗・結果報告）, `delegation`（タスク委譲）, `question`（質問・返答が必要な問い合わせ）のみ。acknowledgment・感謝・FYI は Board（post_channel）を使用すること |
 | `reply_to` | string | MAY | 返信先メッセージの ID（例: `20260215_093000_123456`） |
 | `thread_id` | string | MAY | スレッド ID。既存スレッドに参加する場合に指定 |
+<!-- AUTO-GENERATED:END -->
 
 ### DM の制限（1回の run あたり）
 

@@ -252,7 +252,7 @@ class TestCmdStart:
         mock_app = MagicMock()
         mock_create.return_value = mock_app
 
-        args = argparse.Namespace(host="0.0.0.0", port=18500)
+        args = argparse.Namespace(host="0.0.0.0", port=18500, foreground=True)
         cmd_start(args)
 
         mock_uvicorn.assert_called_once_with(
@@ -287,7 +287,7 @@ class TestCmdStart:
         mock_app = MagicMock()
         mock_create.return_value = mock_app
 
-        args = argparse.Namespace(host="0.0.0.0", port=18500)
+        args = argparse.Namespace(host="0.0.0.0", port=18500, foreground=True)
         cmd_start(args)
 
         call_kwargs = mock_uvicorn.call_args
@@ -314,7 +314,7 @@ class TestCmdStart:
         mock_app = MagicMock()
         mock_create.return_value = mock_app
 
-        args = argparse.Namespace(host="0.0.0.0", port=18500)
+        args = argparse.Namespace(host="0.0.0.0", port=18500, foreground=True)
         cmd_start(args)
 
         call_kwargs = mock_uvicorn.call_args
@@ -359,18 +359,18 @@ class TestCmdStop:
 
 
 class TestCmdRestart:
-    @patch("cli.commands.server.cmd_start")
+    @patch("cli.commands.server._spawn_daemon")
     @patch("cli.commands.server._clear_pycache", return_value=0)
     @patch("cli.commands.server._stop_server", return_value=True)
     @patch("time.sleep")
-    def test_restart_success(self, mock_sleep, mock_stop, mock_clear, mock_start):
+    def test_restart_success(self, mock_sleep, mock_stop, mock_clear, mock_spawn):
         from cli.commands.server import cmd_restart
 
         args = argparse.Namespace(host="0.0.0.0", port=18500)
         cmd_restart(args)
 
         mock_stop.assert_called_once()
-        mock_start.assert_called_once_with(args)
+        mock_spawn.assert_called_once_with(args)
 
     @patch("cli.commands.server._stop_server", return_value=False)
     def test_restart_stop_fails(self, mock_stop):

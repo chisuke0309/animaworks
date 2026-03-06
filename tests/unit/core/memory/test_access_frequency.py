@@ -326,10 +326,10 @@ class TestUpdateMetadataOnVectorStore:
         update_metadata to change a field, then queries back and verifies
         the metadata was updated.
         """
-        chromadb = pytest.importorskip(
-            "chromadb",
-            reason="ChromaDB not installed. Install with: pip install 'animaworks[rag]'",
-        )
+        try:
+            import chromadb  # noqa: F401
+        except Exception:
+            pytest.skip("chromadb not available (Python 3.14 pydantic incompatibility)")
 
         from core.memory.rag.store import ChromaVectorStore, Document
 

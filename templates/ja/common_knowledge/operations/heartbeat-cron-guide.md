@@ -180,6 +180,7 @@ type: llm
 
 各タスクは内部的に以下の `CronTask` モデルにパースされる:
 
+<!-- AUTO-GENERATED:START cron_fields -->
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|------|-----------|------|
 | `name` | str | （必須） | タスク名。`##` 見出しから抽出される |
@@ -191,6 +192,7 @@ type: llm
 | `args` | dict \| None | `None` | tool の引数（YAML 形式） |
 | `skip_pattern` | str \| None | `None` | Command 型: stdout がこの正規表現にマッチしたら follow-up LLM をスキップ |
 | `trigger_heartbeat` | bool | `True` | Command 型: `False` ならコマンド出力後の follow-up cron LLM をスキップ |
+<!-- AUTO-GENERATED:END -->
 
 ## LLM 型 Cron タスク
 
