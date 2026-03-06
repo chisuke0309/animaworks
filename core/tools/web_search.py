@@ -187,6 +187,12 @@ def dispatch(name: str, args: dict[str, Any]) -> Any:
     """Dispatch a tool call by schema name."""
     if name == "web_search":
         args.pop("anima_dir", None)
+        # Coerce count to int (LLM may pass as string)
+        if "count" in args:
+            try:
+                args["count"] = int(args["count"])
+            except (TypeError, ValueError):
+                args["count"] = 10
         return search(**args)
     raise ValueError(f"Unknown tool: {name}")
 

@@ -219,6 +219,13 @@ class PermissionsMixin:
 
         # Parse allowed directory whitelist from permissions.md
         raw_items = self._parse_permission_section(header)
+
+        # For write operations, also check "書ける場所" section (write-specific whitelist)
+        if write:
+            write_header = self._find_section_header(permissions, ("書ける場所", "writable"))
+            if write_header and write_header != header:
+                raw_items = raw_items + self._parse_permission_section(write_header)
+
         allowed_dirs = [
             Path(item).resolve() for item in raw_items if item.startswith("/")
         ]

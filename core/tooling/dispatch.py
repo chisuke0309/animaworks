@@ -90,8 +90,8 @@ class ExternalToolDispatcher:
                     continue
                 return self._call_module(mod, name, args)
             except Exception as e:
-                logger.warning("External tool %s failed: %s", name, e)
-                return f"Error executing {name}: {e}"
+                logger.warning("Tool module %s failed to load, skipping: %s", tool_name, e)
+                continue
 
         return None
 
