@@ -81,6 +81,10 @@ class ExternalToolDispatcher:
                 continue
             try:
                 mod = importlib.import_module(module_path)
+            except Exception as e:
+                logger.warning("Failed to import tool module %s: %s", tool_name, e)
+                continue
+            try:
                 schemas = (
                     mod.get_tool_schemas()
                     if hasattr(mod, "get_tool_schemas")
