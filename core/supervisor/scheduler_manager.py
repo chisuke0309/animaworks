@@ -103,8 +103,10 @@ class SchedulerManager:
         app_config = load_config()
         interval = app_config.heartbeat.interval_minutes
 
-        # Fixed offset: crc32(anima_name) % 10 → deterministic 0-9 min spread
-        offset = zlib.crc32(self._anima_name.encode()) % 10
+        # Use explicit offset from config if set, otherwise fall back to crc32-based spread
+        anima_cfg = app_config.animas.get(self._anima_name)
+        explicit_offset = anima_cfg.heartbeat_offset_minutes if anima_cfg else None
+        offset = explicit_offset if explicit_offset is not None else zlib.crc32(self._anima_name.encode()) % interval
 
         # Build minute spec: base slots (0, 30 for 30min interval) + offset
         # e.g. offset=3, interval=30 → minute="3,33"

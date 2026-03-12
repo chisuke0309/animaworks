@@ -43,6 +43,43 @@ import httpx
 
 logger = logging.getLogger("animaworks.execution.anthropic_fallback")
 
+# Group 3 header markers used to split static vs dynamic sections of the system prompt
+_GROUP3_MARKERS = ("# 3. 現在の状況", "# 3. Current Situation")
+# Minimum token size for the static section to bother caching (~1024 tokens)
+_CACHE_MIN_CHARS = 4096
+
+
+def _build_cached_system(system_prompt: str) -> list[dict] | str:
+    """Convert system_prompt string to Anthropic blocks format with prompt caching.
+
+    Splits at the Group 3 boundary (dynamic section) so that Groups 1+2
+    (static identity/behavior) are cached, while Group 3+ (priming/state)
+    is left uncached and can change freely between calls.
+
+    Returns a list of blocks if caching is applicable, otherwise the original string.
+    """
+    split_pos = -1
+    for marker in _GROUP3_MARKERS:
+        pos = system_prompt.find(marker)
+        if pos > _CACHE_MIN_CHARS:
+            split_pos = pos
+            break
+
+    if split_pos == -1:
+        # No suitable boundary found; cache whole prompt only if it's large
+        if len(system_prompt) >= _CACHE_MIN_CHARS:
+            return [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+        return system_prompt
+
+    static_part = system_prompt[:split_pos].rstrip()
+    dynamic_part = system_prompt[split_pos:]
+    blocks: list[dict] = [
+        {"type": "text", "text": static_part, "cache_control": {"type": "ephemeral"}},
+    ]
+    if dynamic_part.strip():
+        blocks.append({"type": "text", "text": dynamic_part})
+    return blocks
+
 
 def _extract_tool_uses_from_messages(messages: list[dict]) -> list[dict]:
     """Extract tool_use info from Anthropic-format messages."""
@@ -214,7 +251,7 @@ class AnthropicFallbackExecutor(BaseExecutor):
             create_kwargs: dict[str, Any] = {
                 "model": self._model_config.model,
                 "max_tokens": _eff_max,
-                "system": system_prompt,
+                "system": _build_cached_system(system_prompt),
                 "messages": messages,
                 "timeout": httpx.Timeout(self._resolve_llm_timeout()),
             }
@@ -433,7 +470,7 @@ class AnthropicFallbackExecutor(BaseExecutor):
                 stream_kwargs: dict[str, Any] = {
                     "model": self._model_config.model,
                     "max_tokens": _eff_max_s,
-                    "system": system_prompt,
+                    "system": _build_cached_system(system_prompt),
                     "messages": messages,
                     "timeout": httpx.Timeout(self._resolve_llm_timeout()),
                 }

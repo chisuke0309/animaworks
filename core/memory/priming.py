@@ -141,6 +141,7 @@ class PrimingEngine:
         self._budget_request: int = _BUDGET_REQUEST
         self._budget_heartbeat: int = _BUDGET_HEARTBEAT
         self._heartbeat_context_pct: float = 0.05
+        self._excluded_tools: set[str] = set()
 
     # ── Main entry point ────────────────────────────────────────
 
@@ -362,6 +363,13 @@ class PrimingEngine:
             prioritized = self._prioritize_entries(entries, sender_name, keywords)
             # Apply limit after scoring
             prioritized = prioritized[:50]
+            # Filter out low-signal internal tool operations
+            self._load_config_budgets()
+            if self._excluded_tools:
+                prioritized = [
+                    e for e in prioritized
+                    if not (e.type == "tool_use" and e.tool in self._excluded_tools)
+                ]
             return activity.format_for_priming(prioritized, budget_tokens=1300)
 
         # Fallback: read old episodes if no activity log exists yet
@@ -934,6 +942,7 @@ class PrimingEngine:
             self._budget_request = p.budget_request
             self._budget_heartbeat = p.budget_heartbeat
             self._heartbeat_context_pct = p.heartbeat_context_pct
+            self._excluded_tools = set(p.excluded_tools)
         except Exception:
             logger.debug("Failed to load priming config; using defaults")
 

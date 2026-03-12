@@ -12,6 +12,7 @@
   "minimax/*": "A",
   "moonshot/*": "A",
   "deepseek/deepseek-chat": "A",
+  "ollama/qwen3.5:27b": "A",
   "ollama/qwen3:14b": "A",
   "ollama/qwen3:30b": "A",
   "ollama/qwen3:32b": "A",

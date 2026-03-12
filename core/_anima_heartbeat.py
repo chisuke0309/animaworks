@@ -337,7 +337,19 @@ class HeartbeatMixin:
             self._last_activity = now_jst()
 
             # Activity log: heartbeat end
-            self._activity.log("heartbeat_end", summary=result.summary)
+            # Strip verbose O/P/R output before saving to prevent feedback loop
+            _hb_summary = result.summary or ""
+            if "HEARTBEAT_OK" in _hb_summary:
+                _hb_summary = "HEARTBEAT_OK"
+            elif _hb_summary:
+                import re as _re
+                _hb_summary = _re.sub(
+                    r"##\s*(?:Observe|Plan|Reflect)(?:（[^）]*）)?\b.*",
+                    "",
+                    _hb_summary,
+                    flags=_re.DOTALL | _re.IGNORECASE,
+                ).strip()[:200] or _hb_summary[:200]
+            self._activity.log("heartbeat_end", summary=_hb_summary)
 
             # Session boundary: finalize pending conversation turns
             try:
@@ -358,8 +370,11 @@ class HeartbeatMixin:
                     episode_entry += t("anima.heartbeat_msgs_processed", count=unread_count)
 
                 # A-3b: Extract and record reflection from accumulated text
+                # Reflections are only saved when the heartbeat actually took action
+                # (_hb_summary != HEARTBEAT_OK). This ensures O/P/R artifacts from
+                # verbose no-op runs are never persisted into the feedback loop.
                 reflection_text = _extract_reflection(accumulated_text)
-                if reflection_text and len(reflection_text) >= _MIN_REFLECTION_LENGTH:
+                if reflection_text and len(reflection_text) >= _MIN_REFLECTION_LENGTH and _hb_summary != "HEARTBEAT_OK":
                     episode_entry += (
                         f"\n\n[REFLECTION]\n{reflection_text}\n[/REFLECTION]"
                     )

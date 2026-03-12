@@ -72,6 +72,7 @@ class AnimaModelConfig(BaseModel):
 
     supervisor: str | None = None
     speciality: str | None = None
+    heartbeat_offset_minutes: int | None = None  # override crc32-based offset
 
 
 # ── Default model names (single source of truth) ─────────────────────────────
@@ -122,6 +123,22 @@ class PrimingConfig(BaseModel):
     budget_request: int = 3000
     budget_heartbeat: int = 200  # fallback when context_window is unknown
     heartbeat_context_pct: float = 0.05  # fraction of context_window for HB budget
+    # tool_use entries for these tools are excluded from priming (low-signal system ops)
+    excluded_tools: list[str] = [
+        "search_memory",
+        "read_memory_file",
+        "write_memory_file",
+        "archive_memory_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "list_directory",
+        "search_code",
+        "read_channel",
+        "read_dm_history",
+        "discover_tools",
+        "refresh_tools",
+    ]
 
 
 class ConsolidationConfig(BaseModel):
@@ -631,6 +648,7 @@ DEFAULT_MODEL_MODE_PATTERNS: dict[str, str] = {
     "deepseek/deepseek-chat": "A",
 
     # ── A: Ollama models with reliable tool_use ──────────
+    "ollama/qwen3.5:27b": "A",
     "ollama/qwen3:14b": "A",
     "ollama/qwen3:30b": "A",
     "ollama/qwen3:32b": "A",
@@ -698,6 +716,7 @@ KNOWN_MODELS: list[dict[str, str]] = [
     {"name": "xai/grok-3-mini-beta",         "mode": "A", "note": "軽量Grok"},
     # ── Ollama Local (Mode A: tool_use 対応) ─────────────────────────────────
     {"name": "ollama/glm-4.7",               "mode": "A", "note": "ローカル・tool_use対応"},
+    {"name": "ollama/qwen3.5:27b",           "mode": "A", "note": "ローカル27B・tool_use対応"},
     {"name": "ollama/qwen3:14b",             "mode": "A", "note": "ローカル中型"},
     {"name": "ollama/qwen3:32b",             "mode": "A", "note": "ローカル大型"},
     # ── Codex (Mode C) ──────────────────────────────────────────────────────
