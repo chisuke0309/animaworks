@@ -129,8 +129,11 @@ class InboxMixin:
                     )
                     self.agent._tool_handler.set_session_origin(_worst_origin, _unique_chains)
 
-                    self.agent.reset_reply_tracking(session_type="inbox")
-                    self.agent.reset_posted_channels(session_type="inbox")
+                    # Reset ALL sessions (not just "inbox") to clear any stale
+                    # state from prior heartbeat/inbox runs (e.g. chat session
+                    # or chained-run leftovers) that could falsely block sends.
+                    self.agent.reset_reply_tracking()
+                    self.agent.reset_posted_channels()
 
                     # Reset session state files (Change 2)
                     # prev heartbeat/inbox run leftovers can block send_message if not cleared

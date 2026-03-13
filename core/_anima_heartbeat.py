@@ -285,9 +285,10 @@ class HeartbeatMixin:
         except Exception:
             logger.debug("[%s] Failed to write heartbeat checkpoint", self.name, exc_info=True)
 
-        # Reset reply tracking before the cycle
-        self.agent.reset_reply_tracking(session_type="background")
-        self.agent.reset_posted_channels(session_type="background")
+        # Reset ALL reply/channel tracking before the cycle (not just "background")
+        # so stale state from prior heartbeat/inbox runs can't block new sends.
+        self.agent.reset_reply_tracking()
+        self.agent.reset_posted_channels()
         # Clear replied_to persistence file
         _replied_to_path = self.anima_dir / "run" / "replied_to.jsonl"
         if _replied_to_path.exists():
@@ -299,6 +300,10 @@ class HeartbeatMixin:
         # Streaming journal for heartbeat crash recovery
         journal = StreamingJournal(self.anima_dir, session_type="heartbeat")
         journal.open(trigger="heartbeat")
+
+        # Set session type so sends go into _replied_to["heartbeat"] (not "chat")
+        from core.tooling.handler_base import active_session_type as _active_session_type
+        _hb_session_token = self.agent._tool_handler.set_active_session_type("heartbeat")
 
         try:
             async for chunk in self.agent.run_cycle_streaming(
@@ -402,6 +407,7 @@ class HeartbeatMixin:
             return result
         finally:
             journal.close()
+            _active_session_type.reset(_hb_session_token)
 
     async def _handle_heartbeat_failure(
         self,
