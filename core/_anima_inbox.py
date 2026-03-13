@@ -132,6 +132,18 @@ class InboxMixin:
                     self.agent.reset_reply_tracking(session_type="inbox")
                     self.agent.reset_posted_channels(session_type="inbox")
 
+                    # Reset session state files (Change 2)
+                    # prev heartbeat/inbox run leftovers can block send_message if not cleared
+                    replied_to_path = self.anima_dir / "run" / "replied_to.jsonl"
+                    try:
+                        replied_to_path.unlink(missing_ok=True)
+                        logger.debug("[%s] Cleared replied_to session state", self.name)
+                    except Exception:
+                        logger.debug(
+                            "[%s] Failed to clear replied_to session state",
+                            self.name, exc_info=True,
+                        )
+
                     journal = StreamingJournal(self.anima_dir, session_type="inbox")
                     journal.open(trigger=trigger, from_person=senders_str)
 
