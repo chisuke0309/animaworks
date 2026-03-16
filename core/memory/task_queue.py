@@ -400,6 +400,42 @@ class TaskQueueManager:
                 result.append(task)
         return result
 
+    # Auto-block threshold: 2 hours (longer than display threshold to allow recovery)
+    _AUTO_BLOCK_THRESHOLD_SEC = 7200
+
+    def auto_block_stale_tasks(
+        self,
+        threshold_sec: int | None = None,
+    ) -> list[TaskEntry]:
+        """Auto-transition long-stale pending/in_progress tasks to blocked.
+
+        Tasks not updated for threshold_sec (default: 2 hours) are
+        automatically marked as blocked to prevent stuck state from
+        persisting indefinitely across sessions.
+
+        Returns list of newly blocked TaskEntry objects.
+        """
+        if threshold_sec is None:
+            threshold_sec = self._AUTO_BLOCK_THRESHOLD_SEC
+        now = now_jst()
+        blocked: list[TaskEntry] = []
+        for task in self.get_pending():
+            elapsed = _elapsed_seconds(task.updated_at, now)
+            if elapsed is not None and elapsed >= threshold_sec:
+                elapsed_min = int(elapsed / 60)
+                updated = self.update_status(
+                    task.task_id,
+                    "blocked",
+                    summary=f"[自動blocked] {elapsed_min}分間更新なし: {task.summary[:80]}",
+                )
+                if updated:
+                    blocked.append(updated)
+                    logger.info(
+                        "Auto-blocked stale task: id=%s elapsed=%dm summary=%s",
+                        task.task_id, elapsed_min, task.summary[:50],
+                    )
+        return blocked
+
     # ── Maintenance ────────────────────────────────────────────
 
     def compact(self) -> int:

@@ -147,6 +147,32 @@ class InboxMixin:
                             self.name, exc_info=True,
                         )
 
+                    # Auto-block long-stale tasks before LLM runs so the system
+                    # prompt reflects idle (not stuck) state for the cycle.
+                    # This handles the case where inbox arrives before heartbeat.
+                    try:
+                        from core.memory.task_queue import TaskQueueManager as _InboxTQM
+                        _itq = _InboxTQM(self.anima_dir)
+                        _inbox_blocked = _itq.auto_block_stale_tasks()
+                        if _inbox_blocked:
+                            _current = self.memory.read_current_state()
+                            if "status: idle" not in _current.lower():
+                                _ts = now_jst().strftime("%Y-%m-%d %H:%M")
+                                _blocked_ids = ", ".join(t.task_id[:8] for t in _inbox_blocked)
+                                self.memory.update_state(
+                                    f"status: idle\n\n"
+                                    f"（{_ts}: inbox受信前に長期スタックタスクを自動blocked化: {_blocked_ids}）"
+                                )
+                            logger.info(
+                                "[%s] inbox: auto-blocked %d stale task(s)",
+                                self.name, len(_inbox_blocked),
+                            )
+                    except Exception:
+                        logger.debug(
+                            "[%s] inbox: failed to auto-block stale tasks",
+                            self.name, exc_info=True,
+                        )
+
                     journal = StreamingJournal(self.anima_dir, session_type="inbox")
                     journal.open(trigger=trigger, from_person=senders_str)
 

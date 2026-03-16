@@ -212,15 +212,71 @@ class HeartbeatMixin:
 
         return parts
 
+    def _handle_stale_task_auto_blocking(self) -> str:
+        """Auto-block long-stale tasks and reset current_task.md if needed.
+
+        Calls TaskQueueManager.auto_block_stale_tasks() and, if any tasks were
+        blocked, resets current_task.md to idle so the next LLM cycle won't be
+        paralysed by a stale stuck-state.
+
+        Returns a notification fragment for prompt injection, or "" if nothing
+        was blocked.
+        """
+        try:
+            from core.memory.task_queue import TaskQueueManager
+            tq = TaskQueueManager(self.anima_dir)
+            blocked = tq.auto_block_stale_tasks()
+            if not blocked:
+                return ""
+
+            items = "\n".join(
+                f"  - [{task.task_id[:8]}] {task.summary[:100]}"
+                for task in blocked
+            )
+
+            # Reset current_task.md to idle if it's not already
+            current_state = self.memory.read_current_state()
+            if "status: idle" not in current_state.lower():
+                ts = now_jst().strftime("%Y-%m-%d %H:%M")
+                self.memory.update_state(
+                    f"status: idle\n\n"
+                    f"---\n\n"
+                    f"⚠️ {ts}: 以下のタスクを自動blocked化しました（2時間更新なし）:\n{items}"
+                )
+
+            # Record in activity log
+            self._activity.log(
+                "task_auto_blocked",
+                summary=f"タスク自動blocked: {len(blocked)}件",
+                meta={"blocked_count": len(blocked), "task_ids": [task.task_id for task in blocked]},
+            )
+
+            return (
+                f"## ⚠️ スタックタスク自動blocked通知\n\n"
+                f"以下の {len(blocked)} 件のタスクが2時間以上更新されていないため、"
+                f"自動的にblocked状態に遷移しました。\n"
+                f"依頼者への報告が必要な場合はsend_messageで連絡してください。\n\n"
+                f"{items}"
+            )
+        except Exception:
+            logger.debug("[%s] Failed to auto-block stale tasks", self.name, exc_info=True)
+            return ""
+
     async def _build_heartbeat_prompt(self) -> list[str]:
         """Build heartbeat prompt parts.
 
         Heartbeat-specific header + shared background context.
+        Auto-blocks long-stale tasks before building the context.
         """
         hb_config = self.memory.read_heartbeat_config()
         checklist = hb_config or load_prompt("heartbeat_default_checklist")
         task_delegation_rules = load_prompt("task_delegation_rules")
         parts = [load_prompt("heartbeat", checklist=checklist, task_delegation_rules=task_delegation_rules)]
+
+        # Auto-block tasks stuck for 2+ hours and notify LLM
+        stale_notification = self._handle_stale_task_auto_blocking()
+        if stale_notification:
+            parts.append(stale_notification)
 
         parts.extend(self._build_background_context_parts())
 
