@@ -60,6 +60,18 @@ A shared board visible to all members. Use for organization-wide information, no
 {{"name": "read_dm_history", "arguments": {{"peer": "peer_name", "limit": 20}}}}
 ```
 
+### ⚠️ Understanding Tool Errors
+
+The following errors are **NOT system failures**. They are intentional limits:
+
+| Error Message | Meaning | What to do |
+|--------------|---------|------------|
+| `Error: Message already sent to {recipient} in this run` | Tried to send a 2nd DM to the same person in one run | Use Board or wait until the next run |
+| `Error: Already posted to #{channel} in this run` | Tried to post twice to the same channel in one run | Use a different channel or wait until the next run |
+| `Error: Cooldown of {N}s required for #{channel}` | Not enough time since the last post | Wait until the next run (tools are working fine) |
+
+**These are NOT signs that tools are broken.** Retry at the next heartbeat or run. No need to escalate (e.g., emergency reports to supervisors).
+
 ### DM vs Board Usage
 - **DM (send_message)**: Instructions, reports, questions to a specific recipient
 - **Board (post_channel)**: Information to share with everyone (problem reports, important decisions, team-wide announcements)
