@@ -638,6 +638,7 @@ DEFAULT_MODEL_MODE_PATTERNS: dict[str, str] = {
     "azure/*": "A",
     "bedrock/*": "A",
     "google/*": "A",
+    "gemini/*": "A",
     "vertex_ai/*": "A",
     "mistral/*": "A",
     "xai/*": "A",
