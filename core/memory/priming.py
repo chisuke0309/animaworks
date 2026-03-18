@@ -354,6 +354,10 @@ class PrimingEngine:
         activity = ActivityLogger(self.anima_dir)
         entries = activity.recent(days=2, limit=100)  # Top-50 selected after scoring below
 
+        # Remove message_received entries that were fully handled in a completed inbox session.
+        # Leaving them visible causes the LLM to re-create tasks from old instructions.
+        entries = self._filter_processed_inbox_messages(entries)
+
         # Always read shared channels for cross-Anima visibility
         channel_entries = self._read_shared_channels(limit_per_channel=5)
         entries.extend(channel_entries)
@@ -470,6 +474,37 @@ class PrimingEngine:
             logger.warning("Failed to read shared channels", exc_info=True)
 
         return result
+
+    @staticmethod
+    def _filter_processed_inbox_messages(entries: list) -> list:
+        """Remove message_received entries handled in a completed inbox session.
+
+        An inbox session is bounded by inbox_processing_start / inbox_processing_end.
+        Any message_received within a *completed* session has already been acted on,
+        so exposing it in priming causes the LLM to re-create tasks from stale instructions.
+        """
+        # Build completed session ranges (start_ts, end_ts)
+        completed_ranges: list[tuple[str, str]] = []
+        start_ts: str | None = None
+        for entry in entries:
+            if entry.type == "inbox_processing_start":
+                start_ts = entry.ts
+            elif entry.type == "inbox_processing_end" and start_ts is not None:
+                completed_ranges.append((start_ts, entry.ts))
+                start_ts = None
+
+        if not completed_ranges:
+            return entries
+
+        def _is_processed(entry) -> bool:
+            if entry.type not in ("message_received", "dm_received"):
+                return False
+            for r_start, r_end in completed_ranges:
+                if r_start <= entry.ts <= r_end:
+                    return True
+            return False
+
+        return [e for e in entries if not _is_processed(e)]
 
     def _prioritize_entries(
         self,
