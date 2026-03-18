@@ -658,6 +658,26 @@ class OrgToolsMixin:
         summary = args.get("summary", "") or instruction[:100]
         deadline = args.get("deadline", "")
 
+        # ── Prompt injection detection on delegation instruction ──
+        from core.execution._sanitize import detect_injection
+        injection_findings = detect_injection(instruction)
+        if injection_findings:
+            labels = [f["pattern"] for f in injection_findings]
+            logger.warning(
+                "Prompt injection detected in delegate_task instruction "
+                "(%s -> %s): %s",
+                self._anima_name, target_name, ", ".join(labels),
+            )
+            self._activity.log(
+                "security_warning",
+                tool="delegate_task",
+                summary=f"Injection patterns detected: {', '.join(labels)}",
+                meta={
+                    "target": target_name,
+                    "patterns": [f for f in injection_findings],
+                },
+            )
+
         if not target_name:
             return _error_result("InvalidArguments", "name is required")
         if not instruction:
@@ -699,6 +719,12 @@ class OrgToolsMixin:
             outgoing_chain.append(ORIGIN_ANIMA)
         outgoing_chain = outgoing_chain[:MAX_ORIGIN_CHAIN_LENGTH]
 
+        # Sanitize instruction for DM delivery if injection was detected
+        dm_instruction = instruction
+        if injection_findings:
+            from core.execution._sanitize import sanitize_delegation_content
+            dm_instruction = sanitize_delegation_content(instruction)
+
         dm_result = ""
         if self._messenger:
             try:
@@ -706,7 +732,7 @@ class OrgToolsMixin:
                     to=target_name,
                     content=t(
                         "handler.delegation_dm_content",
-                        instruction=instruction,
+                        instruction=dm_instruction,
                         deadline=deadline,
                         task_id=sub_entry.task_id,
                     ),

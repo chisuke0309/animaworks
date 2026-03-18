@@ -138,11 +138,15 @@ class ToolHandler(
         self._descendant_activity_dirs: list[Path] = []
         self._descendant_state_files: list[Path] = []
         self._descendant_state_dirs: list[Path] = []
+        self._my_supervisor: str | None = None  # command chain enforcement
         try:
             from core.config.models import load_config
             from core.paths import get_animas_dir
             _cfg = load_config()
             _animas_dir = get_animas_dir()
+            _my_cfg = _cfg.animas.get(self._anima_name)
+            if _my_cfg:
+                self._my_supervisor = _my_cfg.supervisor
             for _sub_name, _sub_cfg in _cfg.animas.items():
                 if _sub_cfg.supervisor == self._anima_name:
                     _sub_dir = (_animas_dir / _sub_name).resolve()

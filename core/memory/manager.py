@@ -259,7 +259,30 @@ class MemoryManager:
 
     # ── Write helpers ─────────────────────────────────────
 
+    # ── Episode contamination patterns ────────────────────────
+    # These patterns indicate the LLM output leaked into episode content,
+    # causing the feedback loop described in MEMORY.md.
+    _BAD_EPISODE_PATTERNS: list = [
+        re.compile(r'\bOVERDUE\b'),                                        # stale task references
+        re.compile(r'^##\s+(Observe|Plan|Reflect)\b', re.MULTILINE | re.IGNORECASE),  # O/P/R headers
+        re.compile(r'^##\s+[OPR]\s*$', re.MULTILINE),                     # single-letter O/P/R
+    ]
+
+    @classmethod
+    def _is_contaminated_episode(cls, entry: str) -> bool:
+        return any(p.search(entry) for p in cls._BAD_EPISODE_PATTERNS)
+
     def append_episode(self, entry: str, *, origin: str = "") -> None:
+        # ── Contamination guard ────────────────────────────────
+        # Reject episodes containing known bad patterns before they
+        # enter the vectordb feedback loop (see MEMORY.md).
+        if self._is_contaminated_episode(entry):
+            logger.warning(
+                "Episode validation failed — contaminated content skipped (len=%d preview=%.80r)",
+                len(entry), entry,
+            )
+            return
+
         path = self.episodes_dir / f"{date.today().isoformat()}.md"
         if not path.exists():
             path.write_text(

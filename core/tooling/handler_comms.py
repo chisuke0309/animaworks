@@ -42,6 +42,7 @@ class CommsToolsMixin:
     _pending_notifications: list[dict[str, Any]]
     _session_origin: str
     _session_origin_chain: list[str]
+    _my_supervisor: str | None
 
     def _handle_send_message(self, args: dict[str, Any]) -> str:
         if not self._messenger:
@@ -50,6 +51,27 @@ class CommsToolsMixin:
         to = args["to"]
         content = args["content"]
         intent = args.get("intent", "")
+
+        # ── Prompt injection detection on message content ──
+        from core.execution._sanitize import detect_injection
+        injection_findings = detect_injection(content)
+        if injection_findings:
+            labels = [f["pattern"] for f in injection_findings]
+            logger.warning(
+                "Prompt injection patterns in send_message "
+                "(%s -> %s): %s",
+                self._anima_name, to, ", ".join(labels),
+            )
+            self._activity.log(
+                "security_warning",
+                tool="send_message",
+                summary=f"Injection patterns detected: {', '.join(labels)}",
+                meta={
+                    "from": self._anima_name,
+                    "to": to,
+                    "patterns": [f for f in injection_findings],
+                },
+            )
 
         # ── Per-run DM limits ──
         if intent not in ("report", "delegation", "question"):
@@ -77,6 +99,23 @@ class CommsToolsMixin:
             resolved = resolve_recipient(
                 to, known_animas, config.external_messaging,
             )
+
+            # ── Command chain enforcement ──
+            # Animas with a supervisor may only send to that supervisor (internal).
+            # External recipients (Telegram, Slack, etc.) are always allowed.
+            supervisor = getattr(self, "_my_supervisor", None)
+            if (
+                supervisor is not None
+                and to in known_animas
+                and to != supervisor
+            ):
+                return _error_result(
+                    "CommandChainViolation",
+                    f"{self._anima_name} は supervisor の {supervisor} にのみ"
+                    f" send_message を送信できます。{to} への直接送信は禁止されています。",
+                    suggestion=f"send_message(to='{supervisor}', ...) を使用してください。",
+                )
+
         except (ValueError, Exception) as e:
             from core.exceptions import RecipientNotFoundError
             if isinstance(e, (ValueError, RecipientNotFoundError)):

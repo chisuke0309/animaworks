@@ -69,6 +69,7 @@ _PROTECTED_FILES = frozenset({
     "permissions.md",
     "identity.md",
     "bootstrap.md",
+    "injection.md",  # command chain definition — immutable by anima itself
 })
 
 _EPISODE_FILENAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(_.+)?\.md$")
