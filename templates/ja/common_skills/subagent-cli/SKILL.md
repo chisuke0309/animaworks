@@ -132,7 +132,7 @@ cursor-agent -p --trust --force --workspace /path/to/workspace "プロンプト"
 | `--trust` | ワークスペースを自動信頼 |
 | `--force` | コマンド自動承認 |
 | `--workspace /path` | 作業ディレクトリ指定（**必須**） |
-| `--model model` | モデル指定（例: `sonnet-4`, `gpt-5`） |
+| `--model model` | モデル指定（例: `haiku-4`, `gpt-5`） |
 | `--output-format text\|json` | 出力形式 |
 | `--mode plan\|ask` | 読み取り専用モード（調査向け） |
 
@@ -183,7 +183,7 @@ claude -p --dangerously-skip-permissions --output-format text "プロンプト"
 |-----------|------|
 | `-p` / `--print` | 非対話モード（**必須**） |
 | `--dangerously-skip-permissions` | 権限チェック省略 |
-| `--model model` | モデル指定（例: `sonnet`, `haiku`） |
+| `--model model` | モデル指定（例: `haiku`, `haiku`） |
 | `--allowedTools "tools"` | 許可ツール制限（例: `"Read Edit Bash(git:*)"`) |
 | `--output-format text\|json` | 出力形式 |
 | `--max-budget-usd N` | コスト上限（ドル）|

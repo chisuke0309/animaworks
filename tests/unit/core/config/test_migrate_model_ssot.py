@@ -32,7 +32,7 @@ class TestMigrateModelConfigToStatus:
         config_data = {
             "version": 1,
             "credentials": {"anthropic": {"api_key": ""}},
-            "anima_defaults": {"model": "claude-sonnet-4-6"},
+            "anima_defaults": {"model": "claude-haiku-4-5-20251001"},
             "animas": {
                 "alice": {"model": "openai/gpt-4o", "supervisor": "bob"},
             },
@@ -159,7 +159,7 @@ class TestMigrateModelConfigToStatus:
             "version": 1,
             "credentials": {"anthropic": {"api_key": ""}},
             "animas": {
-                "alice": {"model": "claude-sonnet"},
+                "alice": {"model": "claude-haiku"},
                 "bob": {"model": "openai/gpt-4o", "credential": "anthropic"},
             },
         }
@@ -178,6 +178,6 @@ class TestMigrateModelConfigToStatus:
 
         alice_status = json.loads((alice_dir / "status.json").read_text(encoding="utf-8"))
         bob_status = json.loads((bob_dir / "status.json").read_text(encoding="utf-8"))
-        assert alice_status["model"] == "claude-sonnet"
+        assert alice_status["model"] == "claude-haiku"
         assert bob_status["model"] == "openai/gpt-4o"
         assert bob_status["credential"] == "anthropic"

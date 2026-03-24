@@ -62,7 +62,7 @@ def _make_mock_response(stop_reason: str = "end_turn") -> MagicMock:
     resp.content = [MagicMock(type="text", text="OK")]
     resp.stop_reason = stop_reason
     resp.usage = MagicMock(input_tokens=100, output_tokens=50)
-    resp.model = "claude-sonnet-4-6"
+    resp.model = "claude-haiku-4-5-20251001"
     return resp
 
 
@@ -75,7 +75,7 @@ class TestAnthropicBlockingThinkingKwargs:
     @pytest.mark.asyncio
     async def test_adaptive_model_uses_output_config(self):
         """Claude 4.6 + thinking → output_config, NOT reasoning_effort."""
-        ex = _make_executor("claude-sonnet-4-6", thinking=True, thinking_effort="medium")
+        ex = _make_executor("claude-haiku-4-5-20251001", thinking=True, thinking_effort="medium")
 
         mock_resp = _make_mock_response()
         mock_client = AsyncMock()
@@ -98,7 +98,7 @@ class TestAnthropicBlockingThinkingKwargs:
     @pytest.mark.asyncio
     async def test_old_claude_uses_manual_thinking(self):
         """Pre-4.6 Claude → thinking type=enabled with budget_tokens."""
-        ex = _make_executor("claude-sonnet-4-5-20250929", thinking=True)
+        ex = _make_executor("claude-haiku-4-5-20251001-20250929", thinking=True)
 
         mock_resp = _make_mock_response()
         mock_client = AsyncMock()
@@ -121,7 +121,7 @@ class TestAnthropicBlockingThinkingKwargs:
     @pytest.mark.asyncio
     async def test_no_thinking_no_extra_params(self):
         """thinking=None → no thinking/output_config/temperature params."""
-        ex = _make_executor("claude-sonnet-4-6", thinking=None)
+        ex = _make_executor("claude-haiku-4-5-20251001", thinking=None)
 
         mock_resp = _make_mock_response()
         mock_client = AsyncMock()
@@ -144,7 +144,7 @@ class TestAnthropicBlockingThinkingKwargs:
     @pytest.mark.asyncio
     async def test_effort_default_high(self):
         """thinking_effort=None → defaults to 'high'."""
-        ex = _make_executor("claude-opus-4-6", thinking=True, thinking_effort=None)
+        ex = _make_executor("claude-haiku-4-5-20251001", thinking=True, thinking_effort=None)
 
         mock_resp = _make_mock_response()
         mock_client = AsyncMock()
@@ -162,9 +162,9 @@ class TestAnthropicBlockingThinkingKwargs:
         assert call_kwargs["output_config"] == {"effort": "high"}
 
     @pytest.mark.asyncio
-    async def test_effort_max_clamped_on_sonnet(self):
-        """effort='max' on Sonnet 4.6 → clamped to 'high'."""
-        ex = _make_executor("claude-sonnet-4-6", thinking=True, thinking_effort="max")
+    async def test_effort_max_clamped_on_haiku(self):
+        """effort='max' on Haiku 4.6 → clamped to 'high'."""
+        ex = _make_executor("claude-haiku-4-5-20251001", thinking=True, thinking_effort="max")
 
         mock_resp = _make_mock_response()
         mock_client = AsyncMock()
@@ -182,9 +182,9 @@ class TestAnthropicBlockingThinkingKwargs:
         assert call_kwargs["output_config"] == {"effort": "high"}
 
     @pytest.mark.asyncio
-    async def test_effort_max_preserved_on_opus(self):
-        """effort='max' on Opus 4.6 → preserved as 'max'."""
-        ex = _make_executor("claude-opus-4-6", thinking=True, thinking_effort="max")
+    async def test_effort_max_preserved_on_haiku(self):
+        """effort='max' on Haiku 4.6 → preserved as 'max'."""
+        ex = _make_executor("claude-haiku-4-5-20251001", thinking=True, thinking_effort="max")
 
         mock_resp = _make_mock_response()
         mock_client = AsyncMock()

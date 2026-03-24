@@ -48,7 +48,7 @@ class TestThinkingOptionModeB:
         """Non-Ollama model should NOT receive a think parameter."""
         agent = make_agent_core(
             name="think-non-ollama",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             execution_mode="assisted",
         )
 

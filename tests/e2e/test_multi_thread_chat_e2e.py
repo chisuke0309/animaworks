@@ -36,7 +36,7 @@ def anima_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def model_config() -> ModelConfig:
-    return ModelConfig(model="claude-sonnet-4-6")
+    return ModelConfig(model="claude-haiku-4-5-20251001")
 
 
 # ── TestMultiThreadConversationE2E ────────────────────────
@@ -274,7 +274,7 @@ class TestSessionsAPIIncludesThreads:
         """GET /api/animas/{name}/sessions returns threads from conversations dir."""
         data_dir = create_test_data_dir(tmp_path)
         anima_dir = create_anima_dir(data_dir, "alice")
-        model_config = ModelConfig(model="claude-sonnet-4-6")
+        model_config = ModelConfig(model="claude-haiku-4-5-20251001")
 
         # Create thread conversations
         for tid in ["thread-x", "thread-y"]:

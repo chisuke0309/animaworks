@@ -35,11 +35,11 @@ class TestSModeAppendTurn:
 
     def test_s_mode_append_turn_direct(self, data_dir: Path, make_anima) -> None:
         """S-mode conversation memory saves human + assistant turns with tool_records."""
-        anima_dir = make_anima(name="test-s", model="claude-sonnet-4-6")
+        anima_dir = make_anima(name="test-s", model="claude-haiku-4-5-20251001")
         from core.schemas import ModelConfig
 
         model_config = ModelConfig(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1024,
             max_turns=5,
             credential="anthropic",

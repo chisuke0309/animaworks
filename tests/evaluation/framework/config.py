@@ -111,7 +111,7 @@ class ExperimentConfig:
         conversation_length: Length of conversations (short/medium/long)
         domain: Memory domain (business/tech_support/education)
         search_config: Search configuration for this condition
-        model_name: LLM model name (default: claude-sonnet-4)
+        model_name: LLM model name (default: claude-haiku-4)
         temperature: LLM temperature (default: 0.7)
         context_window: Context window size in tokens (default: 200000)
         random_seed: Random seed for reproducibility
@@ -124,7 +124,7 @@ class ExperimentConfig:
     conversation_length: ConversationLength
     domain: Domain
     search_config: SearchConfig
-    model_name: str = "claude-sonnet-4"
+    model_name: str = "claude-haiku-4"
     temperature: float = 0.7
     context_window: int = 200000
     random_seed: int | None = None

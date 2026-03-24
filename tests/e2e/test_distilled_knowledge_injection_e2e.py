@@ -57,7 +57,7 @@ def _make_mock_memory(anima_dir: Path, data_dir: Path) -> MagicMock:
     memory.list_common_skill_metas.return_value = []
     memory.collect_distilled_knowledge_separated.return_value = ([], [])
     memory.read_model_config.return_value = MagicMock(
-        model="claude-sonnet-4-6",
+        model="claude-haiku-4-5-20251001",
         supervisor=None,
     )
     return memory

@@ -55,7 +55,7 @@ def data_dir(tmp_path, monkeypatch):
         "system": {"mode": "server", "log_level": "DEBUG"},
         "credentials": {"anthropic": {"api_key": "", "base_url": None}},
         "anima_defaults": {
-            "model": "claude-sonnet-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "max_tokens": 1024,
             "max_turns": 5,
             "credential": "anthropic",
@@ -64,7 +64,7 @@ def data_dir(tmp_path, monkeypatch):
             "conversation_history_threshold": 0.30,
         },
         "animas": {
-            "test-anima": {"model": "claude-sonnet-4-6"},
+            "test-anima": {"model": "claude-haiku-4-5-20251001"},
         },
     }
     (d / "config.json").write_text(
@@ -227,7 +227,7 @@ class TestBuilderKnowledgeInjection:
     def test_budget_overflow(self, memory, anima_dir, data_dir):
         """Files exceeding budget go to overflow_files."""
         # Create a large knowledge file that exceeds 10% of context window
-        # claude-sonnet-4 context = 200,000; budget = 20,000 tokens
+        # claude-haiku-4 context = 200,000; budget = 20,000 tokens
         # 20,000 tokens * 3 chars/token = 60,000 chars
         large_content = "X" * 70_000  # exceeds budget
         _write_knowledge(anima_dir, "huge", large_content, 0.9)

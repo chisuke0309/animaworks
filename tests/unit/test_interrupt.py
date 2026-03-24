@@ -78,7 +78,7 @@ class TestDigitalAnimaInterrupt:
         (d / "identity.md").write_text("# Test Anima", encoding="utf-8")
         (d / "injection.md").write_text("test injection", encoding="utf-8")
         (d / "status.json").write_text(
-            '{"enabled": true, "model": "claude-sonnet-4-6"}',
+            '{"enabled": true, "model": "claude-haiku-4-5-20251001"}',
             encoding="utf-8",
         )
         (d / "state").mkdir()

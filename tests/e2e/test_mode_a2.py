@@ -233,7 +233,7 @@ class TestModeA2Live:
         pytest.importorskip("litellm")
         agent = make_agent_core(
             name="a2-live",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             execution_mode="autonomous",
         )
         # Force A2 mode even with Claude model

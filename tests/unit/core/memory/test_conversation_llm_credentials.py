@@ -32,7 +32,7 @@ class TestCallLlmProviderCredentials:
     @pytest.mark.asyncio
     async def test_bedrock_credentials_passed(self, anima_dir: Path) -> None:
         cfg = ModelConfig(
-            model="bedrock/jp.anthropic.claude-sonnet-4-6",
+            model="bedrock/jp.anthropic.claude-haiku-4-5-20251001",
             extra_keys={
                 "aws_access_key_id": "AKIATEST",
                 "aws_secret_access_key": "secret123",
@@ -93,7 +93,7 @@ class TestCallLlmProviderCredentials:
 
     @pytest.mark.asyncio
     async def test_no_extra_kwargs_for_generic_model(self, anima_dir: Path) -> None:
-        cfg = ModelConfig(model="claude-sonnet-4-6")
+        cfg = ModelConfig(model="claude-haiku-4-5-20251001")
         from core.memory.conversation import ConversationMemory
 
         conv = ConversationMemory(anima_dir, cfg)
@@ -133,7 +133,7 @@ class TestCallLlmProviderCredentials:
     async def test_fallback_model_prefix_used(self, anima_dir: Path) -> None:
         """When fallback_model is set, its prefix determines provider kwargs."""
         cfg = ModelConfig(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             fallback_model="bedrock/anthropic.claude-3-haiku",
             extra_keys={
                 "aws_access_key_id": "AKIAFALLBACK",

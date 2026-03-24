@@ -214,12 +214,12 @@ Role templates are organized across two path types:
 
 | Role | Summary | Default Model |
 |------|---------|---------------|
-| manager | Delegation, reporting, escalation decisions | claude-opus-4-6 |
-| engineer | Code implementation, technical design, testing | claude-opus-4-6 |
-| researcher | Information gathering, analysis, reports | claude-sonnet-4-6 |
-| writer | Document creation, communication design | claude-sonnet-4-6 |
+| manager | Delegation, reporting, escalation decisions | claude-haiku-4-5-20251001 |
+| engineer | Code implementation, technical design, testing | claude-haiku-4-5-20251001 |
+| researcher | Information gathering, analysis, reports | claude-haiku-4-5-20251001 |
+| writer | Document creation, communication design | claude-haiku-4-5-20251001 |
 | ops | Monitoring, anomaly detection, incident response | ollama/glm-4.7 |
-| general | General tasks (default) | claude-sonnet-4-6 |
+| general | General tasks (default) | claude-haiku-4-5-20251001 |
 
 `general` is applied when unspecified. For ops using vLLM, edit `model` and `credential` in
 `status.json` to specify e.g. `openai/glm-4.7-flash`.

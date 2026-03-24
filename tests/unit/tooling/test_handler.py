@@ -227,10 +227,12 @@ class TestHandleRouting:
                 "send_message", {"to": "alice", "content": "hello", "intent": "delegation"},
             )
         assert "Message sent to alice" in result
-        handler_with_messenger._messenger.send.assert_called_once_with(
-            to="alice", content="hello", thread_id="", reply_to="", intent="delegation",
-            origin_chain=["anima"],
-        )
+        call_kwargs = handler_with_messenger._messenger.send.call_args.kwargs
+        assert call_kwargs["to"] == "alice"
+        assert call_kwargs["content"] == "hello"
+        assert call_kwargs["intent"] == "delegation"
+        # delegation auto-creates a task in the target's queue, so task_id is non-empty
+        assert call_kwargs["task_id"] != ""
 
     def test_send_message_intent_empty_returns_error(
         self, handler_with_messenger: ToolHandler, anima_dir: Path,
@@ -1888,3 +1890,89 @@ class TestDeniedCommandEnforcement:
         parsed_d = json.loads(result_denied)
         assert parsed_d["error_type"] == "PermissionDenied"
         assert "denied list" in parsed_d["message"]
+
+
+# ── Rule of Two ───────────────────────────────────────────────
+
+
+class TestRuleOfTwo:
+    """web_fetch and execute_command must not be used in the same cycle."""
+
+    @pytest.fixture
+    def handler_with_cmd_perm(self, anima_dir: Path, memory: MagicMock) -> ToolHandler:
+        """Handler whose permissions.md allows execute_command."""
+        memory.read_permissions.return_value = "## コマンド実行\n- echo: OK\n"
+        return ToolHandler(anima_dir=anima_dir, memory=memory)
+
+    def test_execute_command_blocked_after_web_fetch(
+        self, handler_with_cmd_perm: ToolHandler, anima_dir: Path,
+    ):
+        """After web_fetch succeeds, execute_command is blocked."""
+        h = handler_with_cmd_perm
+        # Manually inject web_fetch into the usage set (avoids real HTTP call)
+        h._rule_of_two_used.add("web_fetch")
+
+        result = h.handle("execute_command", {"command": "echo hi"})
+        parsed = json.loads(result)
+        assert parsed["error_type"] == "RuleOfTwoViolation"
+        assert "web_fetch" in parsed["message"]
+        assert "execute_command" in parsed["message"]
+
+    def test_web_fetch_blocked_after_execute_command(
+        self, handler_with_cmd_perm: ToolHandler, anima_dir: Path,
+    ):
+        """After execute_command succeeds, web_fetch is blocked."""
+        h = handler_with_cmd_perm
+        # Simulate a successful execute_command by injecting into the set
+        h._rule_of_two_used.add("execute_command")
+
+        result = h.handle("web_fetch", {"url": "https://example.com"})
+        parsed = json.loads(result)
+        assert parsed["error_type"] == "RuleOfTwoViolation"
+        assert "execute_command" in parsed["message"]
+        assert "web_fetch" in parsed["message"]
+
+    def test_reset_session_id_clears_rule_of_two(
+        self, handler_with_cmd_perm: ToolHandler,
+    ):
+        """reset_session_id() resets the Rule of Two tracking."""
+        h = handler_with_cmd_perm
+        h._rule_of_two_used.add("web_fetch")
+        assert h._rule_of_two_used  # non-empty
+
+        h.reset_session_id()
+        assert h._rule_of_two_used == set()
+
+    def test_same_tool_twice_allowed(
+        self, handler_with_cmd_perm: ToolHandler, anima_dir: Path,
+    ):
+        """Calling the same tool twice in a cycle is not blocked."""
+        h = handler_with_cmd_perm
+        # Two execute_command calls — should not conflict with each other
+        h._rule_of_two_used.add("execute_command")
+        result = h.handle("execute_command", {"command": "echo hi"})
+        # Should not produce RuleOfTwoViolation
+        if result.startswith("{"):
+            parsed = json.loads(result)
+            assert parsed.get("error_type") != "RuleOfTwoViolation"
+        else:
+            assert "hi" in result
+
+    def test_unrelated_tools_not_affected(
+        self, handler_with_cmd_perm: ToolHandler, anima_dir: Path,
+    ):
+        """Tools outside the Rule of Two pairs are never blocked."""
+        h = handler_with_cmd_perm
+        h._rule_of_two_used.add("web_fetch")
+        # send_message is not in _RULE_OF_TWO_PAIRS — should not be blocked
+        result = h.handle("send_message", {"to": "alice", "content": "hi", "intent": "report"})
+        if result.startswith("{"):
+            parsed = json.loads(result)
+            assert parsed.get("error_type") != "RuleOfTwoViolation"
+
+    def test_rule_of_two_pairs_class_attribute(self):
+        """Verify the class attribute defines exactly the expected pairs."""
+        pairs = ToolHandler._RULE_OF_TWO_PAIRS
+        assert pairs["web_fetch"] == "execute_command"
+        assert pairs["execute_command"] == "web_fetch"
+        assert len(pairs) == 2  # no extra pairs

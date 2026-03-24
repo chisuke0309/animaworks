@@ -46,7 +46,7 @@ def anima(tmp_path: Path) -> "DigitalAnima":
     (anima_dir / "identity.md").write_text("# Test Anima", encoding="utf-8")
     (anima_dir / "injection.md").write_text("Test injection", encoding="utf-8")
     (anima_dir / "status.json").write_text(
-        '{"enabled": true, "role": "general", "model": "claude-sonnet-4-6"}',
+        '{"enabled": true, "role": "general", "model": "claude-haiku-4-5-20251001"}',
         encoding="utf-8",
     )
 

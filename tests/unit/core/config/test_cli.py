@@ -109,7 +109,7 @@ class TestCoerceValue:
 
     def test_string(self):
         assert _coerce_value("hello") == "hello"
-        assert _coerce_value("claude-sonnet-4") == "claude-sonnet-4"
+        assert _coerce_value("claude-haiku-4") == "claude-haiku-4"
 
 
 # ── _set_nested ───────────────────────────────────────────

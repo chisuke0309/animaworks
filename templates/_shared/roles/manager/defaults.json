@@ -1,5 +1,5 @@
 {
-  "model": "claude-sonnet-4-6",
+  "model": "claude-haiku-4-5-20251001",
   "context_threshold": 0.6,
   "max_turns": 50,
   "max_chains": 3,

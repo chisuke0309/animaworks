@@ -23,26 +23,26 @@ from core.schemas import ModelConfig
 
 
 class TestIsAdaptiveModel:
-    def test_opus_46(self):
-        assert is_adaptive_model("claude-opus-4-6") is True
+    def test_haiku_46(self):
+        assert is_adaptive_model("claude-haiku-4-5-20251001") is True
 
-    def test_sonnet_46(self):
-        assert is_adaptive_model("claude-sonnet-4-6") is True
+    def test_haiku_46(self):
+        assert is_adaptive_model("claude-haiku-4-5-20251001") is True
 
     def test_with_provider_prefix(self):
-        assert is_adaptive_model("anthropic/claude-opus-4-6") is True
+        assert is_adaptive_model("anthropic/claude-haiku-4-5-20251001") is True
 
     def test_bedrock_region_prefix(self):
-        assert is_adaptive_model("bedrock/jp.anthropic.claude-sonnet-4-6") is True
+        assert is_adaptive_model("bedrock/jp.anthropic.claude-haiku-4-5-20251001") is True
 
-    def test_bedrock_region_prefix_opus(self):
-        assert is_adaptive_model("bedrock/us.anthropic.claude-opus-4-6") is True
+    def test_bedrock_region_prefix_haiku(self):
+        assert is_adaptive_model("bedrock/us.anthropic.claude-haiku-4-5-20251001") is True
 
     def test_bedrock_without_region(self):
-        assert is_adaptive_model("bedrock/claude-sonnet-4-6") is True
+        assert is_adaptive_model("bedrock/claude-haiku-4-5-20251001") is True
 
-    def test_old_sonnet(self):
-        assert is_adaptive_model("claude-sonnet-4-5-20250929") is False
+    def test_old_haiku(self):
+        assert is_adaptive_model("claude-haiku-4-5-20251001-20250929") is False
 
     def test_non_claude(self):
         assert is_adaptive_model("openai/gpt-4o") is False
@@ -56,16 +56,16 @@ class TestIsAdaptiveModel:
 
 class TestIsAnthropicClaude:
     def test_claude_model(self):
-        assert is_anthropic_claude("claude-sonnet-4-6") is True
+        assert is_anthropic_claude("claude-haiku-4-5-20251001") is True
 
     def test_with_prefix(self):
-        assert is_anthropic_claude("anthropic/claude-opus-4-6") is True
+        assert is_anthropic_claude("anthropic/claude-haiku-4-5-20251001") is True
 
     def test_bedrock_region_prefix(self):
-        assert is_anthropic_claude("bedrock/jp.anthropic.claude-sonnet-4-6") is True
+        assert is_anthropic_claude("bedrock/jp.anthropic.claude-haiku-4-5-20251001") is True
 
     def test_bedrock_region_prefix_eu(self):
-        assert is_anthropic_claude("bedrock/eu.anthropic.claude-opus-4-6") is True
+        assert is_anthropic_claude("bedrock/eu.anthropic.claude-haiku-4-5-20251001") is True
 
     def test_non_claude(self):
         assert is_anthropic_claude("openai/gpt-4o") is False
@@ -79,25 +79,25 @@ class TestIsAnthropicClaude:
 
 class TestResolveThinkingEffort:
     def test_default_high(self):
-        assert resolve_thinking_effort("claude-opus-4-6", None) == "high"
+        assert resolve_thinking_effort("claude-haiku-4-5-20251001", None) == "high"
 
     def test_explicit_medium(self):
-        assert resolve_thinking_effort("claude-opus-4-6", "medium") == "medium"
+        assert resolve_thinking_effort("claude-haiku-4-5-20251001", "medium") == "medium"
 
-    def test_max_on_opus(self):
-        assert resolve_thinking_effort("claude-opus-4-6", "max") == "max"
+    def test_max_on_haiku(self):
+        assert resolve_thinking_effort("claude-haiku-4-5-20251001", "max") == "max"
 
-    def test_max_clamped_on_non_opus(self):
-        assert resolve_thinking_effort("claude-sonnet-4-6", "max") == "high"
+    def test_max_clamped_on_non_haiku(self):
+        assert resolve_thinking_effort("claude-haiku-4-5-20251001", "max") == "high"
 
-    def test_max_on_bedrock_opus(self):
-        assert resolve_thinking_effort("bedrock/jp.anthropic.claude-opus-4-6", "max") == "max"
+    def test_max_on_bedrock_haiku(self):
+        assert resolve_thinking_effort("bedrock/jp.anthropic.claude-haiku-4-5-20251001", "max") == "max"
 
-    def test_max_clamped_on_bedrock_sonnet(self):
-        assert resolve_thinking_effort("bedrock/jp.anthropic.claude-sonnet-4-6", "max") == "high"
+    def test_max_clamped_on_bedrock_haiku(self):
+        assert resolve_thinking_effort("bedrock/jp.anthropic.claude-haiku-4-5-20251001", "max") == "high"
 
     def test_low(self):
-        assert resolve_thinking_effort("claude-sonnet-4-6", "low") == "low"
+        assert resolve_thinking_effort("claude-haiku-4-5-20251001", "low") == "low"
 
 
 # ── resolve_max_tokens ────────────────────────────────────────
@@ -105,7 +105,7 @@ class TestResolveThinkingEffort:
 
 class TestResolveMaxTokens:
     def test_explicit_high_value_preserved(self):
-        result = resolve_max_tokens("claude-sonnet-4-6", 32000, True)
+        result = resolve_max_tokens("claude-haiku-4-5-20251001", 32000, True)
         assert result == 32000
 
     def test_default_when_no_thinking(self):
@@ -113,27 +113,27 @@ class TestResolveMaxTokens:
         assert result == DEFAULT_MAX_TOKENS
 
     def test_thinking_raises_minimum(self):
-        result = resolve_max_tokens("claude-sonnet-4-6", None, True)
+        result = resolve_max_tokens("claude-haiku-4-5-20251001", None, True)
         assert result == 16384
 
     def test_pattern_match_from_config(self):
-        config = AnimaWorksConfig(model_max_tokens={"claude-opus-*": 65536})
-        result = resolve_max_tokens("claude-opus-4-6", None, None, config)
+        config = AnimaWorksConfig(model_max_tokens={"claude-haiku-*": 65536})
+        result = resolve_max_tokens("claude-haiku-4-5-20251001", None, None, config)
         assert result == 65536
 
     def test_pattern_match_overrides_thinking_default(self):
         config = AnimaWorksConfig(model_max_tokens={"claude-*": 32000})
-        result = resolve_max_tokens("claude-sonnet-4-6", None, True, config)
+        result = resolve_max_tokens("claude-haiku-4-5-20251001", None, True, config)
         assert result == 32000
 
     def test_explicit_8192_treated_as_default(self):
         """When explicit value equals DEFAULT_MAX_TOKENS, thinking may override."""
-        result = resolve_max_tokens("claude-sonnet-4-6", 8192, True)
+        result = resolve_max_tokens("claude-haiku-4-5-20251001", 8192, True)
         assert result == 16384
 
     def test_thinking_raises_low_explicit(self):
         """Thinking minimum floor raises values below 16384."""
-        result = resolve_max_tokens("claude-sonnet-4-6", 1024, True)
+        result = resolve_max_tokens("claude-haiku-4-5-20251001", 1024, True)
         assert result == 16384
 
 
@@ -189,7 +189,7 @@ class TestStatusJsonThinkingEffort:
 
         anima_dir = tmp_path / "animas" / "test"
         anima_dir.mkdir(parents=True)
-        status = {"model": "claude-opus-4-6", "thinking": True, "thinking_effort": "medium"}
+        status = {"model": "claude-haiku-4-5-20251001", "thinking": True, "thinking_effort": "medium"}
         (anima_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
 
         result = _load_status_json(anima_dir)
@@ -202,7 +202,7 @@ class TestStatusJsonThinkingEffort:
 
         anima_dir = tmp_path / "animas" / "test"
         anima_dir.mkdir(parents=True)
-        status = {"model": "claude-opus-4-6", "thinking": True}
+        status = {"model": "claude-haiku-4-5-20251001", "thinking": True}
         (anima_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
 
         result = _load_status_json(anima_dir)
@@ -240,7 +240,7 @@ class TestLiteLLMAdaptiveThinking:
     def test_claude_46_gets_adaptive_thinking(self, anima_dir, tool_handler, memory):
         from core.execution.litellm_loop import LiteLLMExecutor
         cfg = ModelConfig(
-            model="claude-sonnet-4-6", thinking=True,
+            model="claude-haiku-4-5-20251001", thinking=True,
             thinking_effort="medium", api_key="k",
         )
         ex = LiteLLMExecutor(
@@ -255,7 +255,7 @@ class TestLiteLLMAdaptiveThinking:
     def test_old_claude_gets_manual_thinking(self, anima_dir, tool_handler, memory):
         from core.execution.litellm_loop import LiteLLMExecutor
         cfg = ModelConfig(
-            model="claude-sonnet-4-5-20250929", thinking=True, api_key="k",
+            model="claude-haiku-4-5-20251001-20250929", thinking=True, api_key="k",
         )
         ex = LiteLLMExecutor(
             model_config=cfg, anima_dir=anima_dir,
@@ -281,7 +281,7 @@ class TestLiteLLMAdaptiveThinking:
     def test_bedrock_gets_reasoning_effort(self, anima_dir, tool_handler, memory):
         from core.execution.litellm_loop import LiteLLMExecutor
         cfg = ModelConfig(
-            model="bedrock/claude-opus-4-6", thinking=True,
+            model="bedrock/claude-haiku-4-5-20251001", thinking=True,
             thinking_effort="medium", api_key="k",
         )
         ex = LiteLLMExecutor(

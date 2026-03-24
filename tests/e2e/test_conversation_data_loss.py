@@ -59,7 +59,7 @@ def _make_anima_with_mocks(anima_dir: Path, shared_dir: Path):
     ConversationMemory is NOT mocked — it writes to the real filesystem
     so we can verify persistence.
     """
-    model_config = ModelConfig(model="claude-sonnet-4-6")
+    model_config = ModelConfig(model="claude-haiku-4-5-20251001")
 
     with (
         patch("core.anima.AgentCore") as MockAgent,

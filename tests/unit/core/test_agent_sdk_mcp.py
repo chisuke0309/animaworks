@@ -20,7 +20,7 @@ from core.schemas import ModelConfig
 
 def _make_executor(
     anima_dir: Path,
-    model: str = "claude-sonnet-4-6",
+    model: str = "claude-haiku-4-5-20251001",
 ) -> "AgentSDKExecutor":
     """Create an AgentSDKExecutor with minimal config."""
     from core.execution.agent_sdk import AgentSDKExecutor

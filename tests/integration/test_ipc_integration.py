@@ -75,7 +75,7 @@ async def test_process_message(data_dir: Path, make_anima):
     """Test process_message IPC request (requires API key)."""
     make_anima(
         "test-anima",
-        model="anthropic/claude-sonnet-4",
+        model="anthropic/claude-haiku-4",
         identity="You are a helpful test assistant."
     )
 

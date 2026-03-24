@@ -26,11 +26,11 @@ from core.prompt.context import (
 
 
 class TestResolveContextWindow:
-    def test_claude_sonnet(self):
-        assert _resolve_context_window("claude-sonnet-4-20250514") == 200_000
+    def test_claude_haiku(self):
+        assert _resolve_context_window("claude-haiku-4-5-20251001") == 200_000
 
-    def test_claude_opus(self):
-        assert _resolve_context_window("claude-opus-4-20250514") == 200_000
+    def test_claude_haiku(self):
+        assert _resolve_context_window("claude-haiku-4-5-20251001") == 200_000
 
     def test_gpt4o(self):
         assert _resolve_context_window("gpt-4o") == 128_000
@@ -43,16 +43,16 @@ class TestResolveContextWindow:
 
     def test_provider_prefix_stripped(self):
         assert _resolve_context_window("openai/gpt-4o") == 128_000
-        assert _resolve_context_window("anthropic/claude-sonnet-4") == 200_000
+        assert _resolve_context_window("anthropic/claude-haiku-4") == 200_000
         assert _resolve_context_window("google/gemini-2.5-pro") == 1_048_576
 
     def test_bedrock_cross_region_prefix_stripped(self):
         """Bedrock cross-region models (jp.anthropic., us.anthropic.) should resolve correctly."""
-        assert _resolve_context_window("bedrock/jp.anthropic.claude-sonnet-4-6") == 128_000
-        assert _resolve_context_window("bedrock/us.anthropic.claude-sonnet-4-6") == 128_000
-        assert _resolve_context_window("bedrock/eu.anthropic.claude-opus-4-6") == 128_000
+        assert _resolve_context_window("bedrock/jp.anthropic.claude-haiku-4-5-20251001") == 128_000
+        assert _resolve_context_window("bedrock/us.anthropic.claude-haiku-4-5-20251001") == 128_000
+        assert _resolve_context_window("bedrock/eu.anthropic.claude-haiku-4-5-20251001") == 128_000
         # Standard bedrock (no region prefix) should still work
-        assert _resolve_context_window("bedrock/claude-sonnet-4-6") == 128_000
+        assert _resolve_context_window("bedrock/claude-haiku-4-5-20251001") == 128_000
 
     def test_all_known_models(self):
         for prefix, expected in MODEL_CONTEXT_WINDOWS.items():
@@ -67,8 +67,8 @@ class TestResolveContextWindowOverrides:
 
     def test_override_takes_priority(self):
         """Config override should win over hardcoded MODEL_CONTEXT_WINDOWS."""
-        overrides = {"claude-sonnet-4*": 100_000}
-        assert _resolve_context_window("claude-sonnet-4-20250514", overrides) == 100_000
+        overrides = {"claude-haiku-4*": 100_000}
+        assert _resolve_context_window("claude-haiku-4-5-20251001", overrides) == 100_000
 
     def test_override_with_provider_prefix(self):
         """Override should match both full model name and bare name."""
@@ -83,7 +83,7 @@ class TestResolveContextWindowOverrides:
     def test_fallback_to_hardcoded_when_no_override_match(self):
         """When overrides don't match, fall back to hardcoded defaults."""
         overrides = {"some-custom-model*": 4096}
-        assert _resolve_context_window("claude-sonnet-4-20250514", overrides) == 200_000
+        assert _resolve_context_window("claude-haiku-4-5-20251001", overrides) == 200_000
 
     def test_fallback_to_default_when_nothing_matches(self):
         """When neither overrides nor hardcoded match, use _DEFAULT_CONTEXT_WINDOW."""
@@ -92,11 +92,11 @@ class TestResolveContextWindowOverrides:
 
     def test_empty_overrides_dict(self):
         """Empty overrides dict should behave like no overrides."""
-        assert _resolve_context_window("claude-sonnet-4-20250514", {}) == 200_000
+        assert _resolve_context_window("claude-haiku-4-5-20251001", {}) == 200_000
 
     def test_none_overrides(self):
         """None overrides should behave like no overrides."""
-        assert _resolve_context_window("claude-sonnet-4-20250514", None) == 200_000
+        assert _resolve_context_window("claude-haiku-4-5-20251001", None) == 200_000
 
     def test_exact_match_override(self):
         """Exact model name in overrides should match."""
@@ -163,15 +163,15 @@ class TestResolveContextThreshold:
 class TestContextTrackerInit:
     def test_defaults(self):
         ct = ContextTracker()
-        assert ct.model == "claude-sonnet-4-6"
+        assert ct.model == "claude-haiku-4-5-20251001"
         # 128K model: threshold auto-scaled from 0.50
         assert ct.threshold > 0.50
         assert ct.context_window_overrides == {}
 
     def test_custom(self):
         # 128K model: threshold gets auto-scaled upward.
-        ct = ContextTracker(model="claude-sonnet-4-6", threshold=0.70)
-        assert ct.model == "claude-sonnet-4-6"
+        ct = ContextTracker(model="claude-haiku-4-5-20251001", threshold=0.70)
+        assert ct.model == "claude-haiku-4-5-20251001"
         assert ct.threshold > 0.70
 
     def test_custom_with_overrides(self):
@@ -194,20 +194,20 @@ class TestContextTrackerInit:
 
     def test_threshold_auto_scaled_for_128k_model(self):
         """128K model should get threshold auto-scaled above 0.50."""
-        ct = ContextTracker(model="claude-sonnet-4-6", threshold=0.50)
+        ct = ContextTracker(model="claude-haiku-4-5-20251001", threshold=0.50)
         assert ct.threshold > 0.50
         assert ct.threshold < 0.80
 
 
 class TestContextTrackerProperties:
     def test_context_window(self):
-        ct = ContextTracker(model="claude-sonnet-4-20250514")
+        ct = ContextTracker(model="claude-haiku-4-5-20251001")
         assert ct.context_window == 200_000
 
     def test_context_window_with_overrides(self):
         ct = ContextTracker(
-            model="claude-sonnet-4-20250514",
-            context_window_overrides={"claude-sonnet-4*": 100_000},
+            model="claude-haiku-4-5-20251001",
+            context_window_overrides={"claude-haiku-4*": 100_000},
         )
         assert ct.context_window == 100_000
 
@@ -245,7 +245,7 @@ class TestEstimateFromTranscript:
         content = "x" * 40_000  # 40000 chars / 4 = 10000 tokens
         f.write_text(content)
 
-        ct = ContextTracker(model="claude-sonnet-4-20250514")  # 200k window
+        ct = ContextTracker(model="claude-haiku-4-5-20251001")  # 200k window
         ratio = ct.estimate_from_transcript(str(f))
         expected = 10_000 / 200_000  # 0.05
         assert abs(ratio - expected) < 0.01
@@ -257,7 +257,7 @@ class TestEstimateFromTranscript:
         # 90K tokens * 4 chars = 360K chars (safely over threshold)
         f.write_text("x" * 400_000)
 
-        ct = ContextTracker(model="claude-sonnet-4-6", threshold=0.50)
+        ct = ContextTracker(model="claude-haiku-4-5-20251001", threshold=0.50)
         ratio = ct.estimate_from_transcript(str(f))
         assert ratio >= ct.threshold
         assert ct.threshold_exceeded is True
@@ -280,14 +280,14 @@ class TestEstimateFromTranscript:
 
 class TestUpdateFromUsage:
     def test_basic_usage(self):
-        ct = ContextTracker(model="claude-sonnet-4-20250514")
+        ct = ContextTracker(model="claude-haiku-4-5-20251001")
         result = ct.update_from_usage({"input_tokens": 50_000, "output_tokens": 5_000})
         assert ct.usage_ratio == pytest.approx(50_000 / 200_000, abs=0.001)
         assert result is False  # didn't cross threshold
 
     def test_threshold_crossed(self):
         # 128K model — threshold auto-scaled to ~0.67 → ~86K tokens triggers
-        ct = ContextTracker(model="claude-sonnet-4-6", threshold=0.50)
+        ct = ContextTracker(model="claude-haiku-4-5-20251001", threshold=0.50)
         result = ct.update_from_usage({"input_tokens": 90_000, "output_tokens": 10_000})
         assert result is True
         assert ct.threshold_exceeded is True
@@ -311,7 +311,7 @@ class TestUpdateFromUsage:
 
 class TestUpdateFromResultMessage:
     def test_with_usage(self):
-        ct = ContextTracker(model="claude-sonnet-4-20250514")
+        ct = ContextTracker(model="claude-haiku-4-5-20251001")
         ct.update_from_result_message({"input_tokens": 80_000, "output_tokens": 20_000})
         expected_ratio = (80_000 + 20_000) / 200_000
         assert ct.usage_ratio == pytest.approx(expected_ratio, abs=0.001)

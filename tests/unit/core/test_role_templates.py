@@ -253,7 +253,7 @@ class TestCreateStatusJsonWithRole:
     def test_role_defaults_merged_into_status(self, tmp_path: Path) -> None:
         """defaults.json values from role template are merged into status.json."""
         roles_root = self._make_roles_dir(tmp_path, "engineer", {
-            "model": "claude-opus-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "context_threshold": 0.80,
             "max_turns": 200,
             "max_chains": 10,
@@ -267,7 +267,7 @@ class TestCreateStatusJsonWithRole:
             _create_status_json(anima_dir, {}, role="engineer")
 
         status = _read_status_json(anima_dir)
-        assert status["model"] == "claude-opus-4-6"
+        assert status["model"] == "claude-haiku-4-5-20251001"
         assert status["context_threshold"] == 0.80
         assert status["max_turns"] == 200
         assert status["max_chains"] == 10
@@ -279,7 +279,7 @@ class TestCreateStatusJsonWithRole:
     ) -> None:
         """Character sheet model value takes priority over role defaults.json."""
         roles_root = self._make_roles_dir(tmp_path, "engineer", {
-            "model": "claude-opus-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "max_turns": 200,
         })
         anima_dir = tmp_path / "anima"
@@ -301,7 +301,7 @@ class TestCreateStatusJsonWithRole:
     ) -> None:
         """Character sheet credential value takes priority over role defaults."""
         roles_root = self._make_roles_dir(tmp_path, "engineer", {
-            "model": "claude-opus-4-6",
+            "model": "claude-haiku-4-5-20251001",
         })
         anima_dir = tmp_path / "anima"
         anima_dir.mkdir()
@@ -334,7 +334,7 @@ class TestCreateStatusJsonWithRole:
         """With role='engineer', engineer defaults.json values appear in status.json."""
         # Use the actual engineer defaults from the repository
         roles_root = self._make_roles_dir(tmp_path, "engineer", {
-            "model": "claude-opus-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "context_threshold": 0.80,
             "max_turns": 200,
             "max_chains": 10,
@@ -349,7 +349,7 @@ class TestCreateStatusJsonWithRole:
 
         status = _read_status_json(anima_dir)
         assert status["role"] == "engineer"
-        assert status["model"] == "claude-opus-4-6"
+        assert status["model"] == "claude-haiku-4-5-20251001"
         assert status["context_threshold"] == 0.80
         assert status["max_turns"] == 200
         assert status["max_chains"] == 10
@@ -398,7 +398,7 @@ class TestCreateStatusJsonWithRole:
     ) -> None:
         """Empty string model/credential from sheet do not override role defaults."""
         roles_root = self._make_roles_dir(tmp_path, "engineer", {
-            "model": "claude-opus-4-6",
+            "model": "claude-haiku-4-5-20251001",
         })
         anima_dir = tmp_path / "anima"
         anima_dir.mkdir()
@@ -411,7 +411,7 @@ class TestCreateStatusJsonWithRole:
 
         status = _read_status_json(anima_dir)
         # Role default should remain since sheet values are empty
-        assert status["model"] == "claude-opus-4-6"
+        assert status["model"] == "claude-haiku-4-5-20251001"
         assert "credential" not in status
 
 
@@ -426,7 +426,7 @@ class TestLoadStatusJson:
         anima_dir = tmp_path / "anima"
         anima_dir.mkdir()
         _write_status_json(anima_dir, {
-            "model": "claude-opus-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "context_threshold": 0.80,
             "max_turns": 200,
             "max_chains": 10,
@@ -437,7 +437,7 @@ class TestLoadStatusJson:
         })
 
         result = _load_status_json(anima_dir)
-        assert result["model"] == "claude-opus-4-6"
+        assert result["model"] == "claude-haiku-4-5-20251001"
         assert result["context_threshold"] == 0.80
         assert result["max_turns"] == 200
         assert result["max_chains"] == 10
@@ -471,7 +471,7 @@ class TestLoadStatusJson:
         anima_dir = tmp_path / "anima"
         anima_dir.mkdir()
         _write_status_json(anima_dir, {
-            "model": "claude-sonnet-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "supervisor": None,
             "credential": None,
         })
@@ -489,7 +489,7 @@ class TestLoadStatusJson:
         anima_dir = tmp_path / "anima"
         anima_dir.mkdir()
         _write_status_json(anima_dir, {
-            "model": "claude-sonnet-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "supervisor": "",
             "credential": "",
         })
@@ -504,7 +504,7 @@ class TestLoadStatusJson:
         anima_dir = tmp_path / "anima"
         anima_dir.mkdir()
         _write_status_json(anima_dir, {
-            "model": "claude-sonnet-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "enabled": True,
             "role": "engineer",
             "unknown_field": "should_be_ignored",
@@ -782,7 +782,7 @@ class TestRoleTemplateIntegration:
         )
         (engineer_dir / "defaults.json").write_text(
             json.dumps({
-                "model": "claude-opus-4-6",
+                "model": "claude-haiku-4-5-20251001",
                 "max_turns": 200,
                 "context_threshold": 0.80,
                 "max_chains": 10,
@@ -810,7 +810,7 @@ class TestRoleTemplateIntegration:
         # Verify status.json
         status = _read_status_json(anima_dir)
         assert status["role"] == "engineer"
-        assert status["model"] == "claude-opus-4-6"
+        assert status["model"] == "claude-haiku-4-5-20251001"
         assert status["max_turns"] == 200
 
     def test_status_json_feeds_into_resolve_anima_config(
@@ -822,7 +822,7 @@ class TestRoleTemplateIntegration:
         engineer_dir.mkdir(parents=True)
         (engineer_dir / "defaults.json").write_text(
             json.dumps({
-                "model": "claude-opus-4-6",
+                "model": "claude-haiku-4-5-20251001",
                 "max_turns": 200,
                 "context_threshold": 0.80,
             }),
@@ -843,6 +843,6 @@ class TestRoleTemplateIntegration:
             config, "testbot", anima_dir=anima_dir
         )
         # status.json values should be picked up
-        assert resolved.model == "claude-opus-4-6"
+        assert resolved.model == "claude-haiku-4-5-20251001"
         assert resolved.max_turns == 200
         assert resolved.context_threshold == 0.80

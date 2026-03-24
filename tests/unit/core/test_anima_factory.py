@@ -520,7 +520,7 @@ class TestParseCharacterSheetInfo:
 | 英名 | sakura |
 | 役割 | developer |
 | 上司 | tanaka |
-| モデル | claude-sonnet |
+| モデル | claude-haiku |
 
 ## 人格
 """
@@ -528,7 +528,7 @@ class TestParseCharacterSheetInfo:
         assert info["name"] == "sakura"
         assert info["役割"] == "developer"  # Unmapped field kept as-is
         assert info["supervisor"] == "tanaka"
-        assert info["model"] == "claude-sonnet"
+        assert info["model"] == "claude-haiku"
 
     def test_empty_content(self):
         info = _parse_character_sheet_info("No 基本情報 section here")

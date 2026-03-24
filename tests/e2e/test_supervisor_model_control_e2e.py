@@ -84,13 +84,13 @@ class TestSetSubordinateModelE2E:
         # Create worker anima directory
         worker_dir = animas_dir / "worker"
         worker_dir.mkdir(parents=True, exist_ok=True)
-        _write_status(worker_dir, enabled=True, supervisor="supervisor", model="claude-sonnet-4-6")
+        _write_status(worker_dir, enabled=True, supervisor="supervisor", model="claude-haiku-4-5-20251001")
 
         # Register both animas in config.json via load/save
         config = load_config()
         config.animas["supervisor"] = AnimaModelConfig()
         config.animas["worker"] = AnimaModelConfig(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             supervisor="supervisor",
         )
         save_config(config)
@@ -101,14 +101,14 @@ class TestSetSubordinateModelE2E:
         # _check_subordinate calls load_config() — use real config via data_dir env
         result = handler.handle(
             "set_subordinate_model",
-            {"name": "worker", "model": "claude-opus-4-6", "reason": "e2e test"},
+            {"name": "worker", "model": "claude-haiku-4-5-20251001", "reason": "e2e test"},
         )
 
-        assert "claude-opus-4-6" in result, f"Unexpected result: {result}"
+        assert "claude-haiku-4-5-20251001" in result, f"Unexpected result: {result}"
 
         # Model config SSoT: status.json is updated, not config.json
         status = _read_status(worker_dir)
-        assert status.get("model") == "claude-opus-4-6", (
+        assert status.get("model") == "claude-haiku-4-5-20251001", (
             f"Expected model in status.json; got: {status}"
         )
 
@@ -132,13 +132,13 @@ class TestRestartSubordinateE2E:
         # Create worker anima directory with existing status.json (enabled: true)
         worker_dir = animas_dir / "worker"
         worker_dir.mkdir(parents=True, exist_ok=True)
-        _write_status(worker_dir, enabled=True, supervisor="supervisor", model="claude-sonnet-4-6")
+        _write_status(worker_dir, enabled=True, supervisor="supervisor", model="claude-haiku-4-5-20251001")
 
         # Register in config.json
         config = load_config()
         config.animas["supervisor"] = AnimaModelConfig()
         config.animas["worker"] = AnimaModelConfig(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             supervisor="supervisor",
         )
         save_config(config)
@@ -180,12 +180,12 @@ class TestSetModelAndRestartSequenceE2E:
 
         worker_dir = animas_dir / "worker"
         worker_dir.mkdir(parents=True, exist_ok=True)
-        _write_status(worker_dir, enabled=True, supervisor="supervisor", model="claude-sonnet-4-6")
+        _write_status(worker_dir, enabled=True, supervisor="supervisor", model="claude-haiku-4-5-20251001")
 
         config = load_config()
         config.animas["supervisor"] = AnimaModelConfig()
         config.animas["worker"] = AnimaModelConfig(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             supervisor="supervisor",
         )
         save_config(config)
@@ -196,9 +196,9 @@ class TestSetModelAndRestartSequenceE2E:
         # Step 1: change model
         result1 = handler.handle(
             "set_subordinate_model",
-            {"name": "worker", "model": "claude-opus-4-6"},
+            {"name": "worker", "model": "claude-haiku-4-5-20251001"},
         )
-        assert "claude-opus-4-6" in result1, f"Unexpected result1: {result1}"
+        assert "claude-haiku-4-5-20251001" in result1, f"Unexpected result1: {result1}"
 
         # Step 2: request restart
         result2 = handler.handle(
@@ -209,8 +209,8 @@ class TestSetModelAndRestartSequenceE2E:
 
         # Verify status.json: model update (SSoT) and restart_requested flag
         status = _read_status(worker_dir)
-        assert status.get("model") == "claude-opus-4-6", (
-            f"Expected model 'claude-opus-4-6' in status.json; "
+        assert status.get("model") == "claude-haiku-4-5-20251001", (
+            f"Expected model 'claude-haiku-4-5-20251001' in status.json; "
             f"got: {status.get('model')}"
         )
         assert status.get("restart_requested") is True, (
@@ -243,7 +243,7 @@ class TestReconciliationRestartRequestedE2E:
             worker_dir,
             enabled=True,
             supervisor="supervisor",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             restart_requested=True,
         )
 

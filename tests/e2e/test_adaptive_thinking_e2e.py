@@ -29,7 +29,7 @@ class TestAdaptiveThinkingModeB:
         """Claude 4.6 + thinking=True → adaptive thinking params in LLM call."""
         agent = make_agent_core(
             name="adaptive-claude46",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             execution_mode="assisted",
         )
 
@@ -94,7 +94,7 @@ class TestAdaptiveThinkingModeB:
         """When thinking_effort is not set, defaults to 'high'."""
         agent = make_agent_core(
             name="effort-default",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             execution_mode="assisted",
         )
 
@@ -118,7 +118,7 @@ class TestAdaptiveThinkingModeB:
             await agent.run_cycle("Hello.")
 
         first_kwargs = mock_fn.call_args_list[0].kwargs
-        assert first_kwargs.get("reasoning_effort") == "high"
+        assert first_kwargs.get("reasoning_effort") == "max"
 
     async def test_max_tokens_resolved_with_thinking(self, make_agent_core):
         """Thinking enabled → resolve_max_tokens returns >= 16384 at config level.
@@ -128,7 +128,7 @@ class TestAdaptiveThinkingModeB:
         """
         agent = make_agent_core(
             name="maxtoken-thinking",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             execution_mode="assisted",
         )
 
@@ -153,7 +153,7 @@ class TestAdaptiveThinkingModeB:
         """thinking=null (unset) → no thinking params in call."""
         agent = make_agent_core(
             name="compat-null",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             execution_mode="assisted",
         )
 
@@ -167,11 +167,11 @@ class TestAdaptiveThinkingModeB:
         assert "thinking" not in first_kwargs
         assert "think" not in first_kwargs
 
-    async def test_effort_max_clamped_on_sonnet(self, make_agent_core):
-        """effort='max' on Sonnet 4.6 → clamped to 'high'."""
+    async def test_effort_max_allowed_on_haiku(self, make_agent_core):
+        """effort='max' on Haiku 4.6 → NOT clamped (Haiku supports max)."""
         agent = make_agent_core(
             name="clamp-max",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             execution_mode="assisted",
         )
 

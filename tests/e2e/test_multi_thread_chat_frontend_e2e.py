@@ -45,7 +45,7 @@ def anima_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def model_config() -> ModelConfig:
-    return ModelConfig(model="claude-sonnet-4-6")
+    return ModelConfig(model="claude-haiku-4-5-20251001")
 
 
 # ── TestChatRequestThreadIdPassthrough ───────────────────────

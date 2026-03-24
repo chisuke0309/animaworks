@@ -37,7 +37,7 @@ def test_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "version": 1,
         "setup_complete": True,
         "credentials": {"anthropic": {"api_key": "", "base_url": None}},
-        "anima_defaults": {"model": "claude-sonnet-4-6", "credential": "anthropic"},
+        "anima_defaults": {"model": "claude-haiku-4-5-20251001", "credential": "anthropic"},
         "animas": {"test_anima": {}},
     }
     (data_dir / "config.json").write_text(json.dumps(config))
@@ -53,7 +53,7 @@ def test_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (anima_dir / "status.json").write_text(
         json.dumps({
             "enabled": True,
-            "model": "claude-sonnet-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "voice": {
                 "tts_provider": "voicevox",
                 "voice_id": "3",

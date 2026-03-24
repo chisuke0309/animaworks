@@ -334,7 +334,7 @@ from framework import DatasetGenerator
 generator = DatasetGenerator(
     output_dir=Path("datasets"),
     use_llm=False  # Template mode (fast)
-    # use_llm=True, model="anthropic/claude-sonnet-4-20250514"  # LLM mode (high quality)
+    # use_llm=True, model="anthropic/claude-haiku-4-5-20251001"  # LLM mode (high quality)
 )
 
 # Generate memory base

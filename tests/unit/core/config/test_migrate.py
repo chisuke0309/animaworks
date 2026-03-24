@@ -37,11 +37,11 @@ class TestParseConfigMd:
     def test_ignores_biko_section(self, tmp_path):
         md = tmp_path / "config.md"
         md.write_text(
-            "- model: claude-sonnet-4\n\n## 備考\n- model: this_should_be_ignored\n",
+            "- model: claude-haiku-4\n\n## 備考\n- model: this_should_be_ignored\n",
             encoding="utf-8",
         )
         result = _parse_config_md(md)
-        assert result["model"] == "claude-sonnet-4"
+        assert result["model"] == "claude-haiku-4"
 
     def test_ignores_example_section(self, tmp_path):
         md = tmp_path / "config.md"

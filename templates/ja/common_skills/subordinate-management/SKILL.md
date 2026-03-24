@@ -59,7 +59,7 @@ enable_subordinate(name="hinata")
 モデル変更は status.json に保存されるが、実行中プロセスへの反映には `restart_subordinate` が必要:
 
 ```
-set_subordinate_model(name="hinata", model="claude-sonnet-4-6", reason="負荷分散のため")
+set_subordinate_model(name="hinata", model="claude-haiku-4-5-20251001", reason="負荷分散のため")
 restart_subordinate(name="hinata", reason="モデル変更を反映")
 ```
 

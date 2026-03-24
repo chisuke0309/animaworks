@@ -23,7 +23,7 @@ class TestAnimaReloadConfig:
     """Test DigitalAnima.reload_config() detects and applies changes."""
 
     def _make_anima_mock(
-        self, old_model: str = "claude-sonnet-4-6", new_model: str = "claude-opus-4-6"
+        self, old_model: str = "claude-haiku-4-5-20251001", new_model: str = "claude-haiku-4-5-20251001"
     ) -> MagicMock:
         from core.anima import DigitalAnima
 
@@ -42,7 +42,7 @@ class TestAnimaReloadConfig:
         result = anima.reload_config()
 
         assert result["status"] == "ok"
-        assert result["model"] == "claude-opus-4-6"
+        assert result["model"] == "claude-haiku-4-5-20251001"
         assert "model" in result["changes"]
         assert "max_tokens" in result["changes"]
 
@@ -50,7 +50,7 @@ class TestAnimaReloadConfig:
         anima = self._make_anima_mock()
         anima.reload_config()
 
-        assert anima.model_config.model == "claude-opus-4-6"
+        assert anima.model_config.model == "claude-haiku-4-5-20251001"
         assert anima.model_config.max_tokens == 16384
 
     def test_reload_propagates_to_agent(self):
@@ -59,14 +59,14 @@ class TestAnimaReloadConfig:
 
         anima.agent.update_model_config.assert_called_once()
         new_config = anima.agent.update_model_config.call_args[0][0]
-        assert new_config.model == "claude-opus-4-6"
+        assert new_config.model == "claude-haiku-4-5-20251001"
 
     def test_reload_no_changes(self):
         anima = self._make_anima_mock(
-            old_model="claude-sonnet-4-6", new_model="claude-sonnet-4-6"
+            old_model="claude-haiku-4-5-20251001", new_model="claude-haiku-4-5-20251001"
         )
         anima.memory.read_model_config.return_value = ModelConfig(
-            model="claude-sonnet-4-6", max_tokens=4096
+            model="claude-haiku-4-5-20251001", max_tokens=4096
         )
         result = anima.reload_config()
 
@@ -100,15 +100,15 @@ class TestAgentUpdateModelConfig:
         (anima_dir / "identity.md").write_text("# test", encoding="utf-8")
 
         memory = MagicMock(spec=MemoryManager)
-        old_config = ModelConfig(model="claude-sonnet-4-6")
+        old_config = ModelConfig(model="claude-haiku-4-5-20251001")
         agent = AgentCore(anima_dir, memory, old_config)
 
         call_count_before = mock_create_executor.call_count
 
-        new_config = ModelConfig(model="claude-opus-4-6")
+        new_config = ModelConfig(model="claude-haiku-4-5-20251001")
         agent.update_model_config(new_config)
 
-        assert agent.model_config.model == "claude-opus-4-6"
+        assert agent.model_config.model == "claude-haiku-4-5-20251001"
         assert mock_create_executor.call_count == call_count_before + 1
 
     @patch("core.agent.AgentCore._create_executor")
@@ -131,11 +131,11 @@ class TestAgentUpdateModelConfig:
         (anima_dir / "identity.md").write_text("# test", encoding="utf-8")
 
         memory = MagicMock(spec=MemoryManager)
-        agent = AgentCore(anima_dir, memory, ModelConfig(model="claude-sonnet-4-6"))
+        agent = AgentCore(anima_dir, memory, ModelConfig(model="claude-haiku-4-5-20251001"))
         old_cw = agent._tool_handler._context_window
 
         with patch("core.config.models.resolve_context_window", return_value=200_000):
-            agent.update_model_config(ModelConfig(model="claude-opus-4-6"))
+            agent.update_model_config(ModelConfig(model="claude-haiku-4-5-20251001"))
 
         assert agent._tool_handler._context_window == 200_000
 
@@ -189,7 +189,7 @@ class TestCLIReloadCommand:
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "status": "ok", "model": "claude-opus-4-6", "changes": ["model"]
+            "status": "ok", "model": "claude-haiku-4-5-20251001", "changes": ["model"]
         }
         mock_response.raise_for_status = MagicMock()
 

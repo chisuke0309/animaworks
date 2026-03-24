@@ -46,7 +46,7 @@ class TestSModeConversationToCompressionPipeline:
     async def test_s_mode_conversation_to_compression_pipeline(
         self, make_anima, data_dir,
     ):
-        """S mode (claude-sonnet-*) conversation turns accumulate, trigger
+        """S mode (claude-haiku-*) conversation turns accumulate, trigger
         compression, and produce a compressed_summary in conversation.json.
 
         Pipeline:
@@ -57,12 +57,12 @@ class TestSModeConversationToCompressionPipeline:
         """
         anima_dir = make_anima(
             name="s-conv-compress",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             conversation_history_threshold=0.001,  # Very low to trigger compression
         )
 
         model_config = ModelConfig(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             conversation_history_threshold=0.001,
         )
         conv_mem = ConversationMemory(anima_dir, model_config)
@@ -135,12 +135,12 @@ class TestSModeConversationToCompressionPipeline:
         """
         anima_dir = make_anima(
             name="s-incr-compress",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             conversation_history_threshold=0.001,
         )
 
         model_config = ModelConfig(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             conversation_history_threshold=0.001,
         )
         conv_mem = ConversationMemory(anima_dir, model_config)

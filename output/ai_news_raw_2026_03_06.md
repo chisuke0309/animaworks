@@ -13,12 +13,12 @@
 - **GPT-5.4**: 2026年3月5日頃リリース — エンタープライズ・エージェント向け最新モデル。高度な推論、コーディング、コンピュータ自律操作に対応
 
 ### Anthropic Claude
-- **Claude Sonnet 4.6**: 2026年2月17日リリース — コーディング性能・PC使用性能向上、コンテキスト最大100万トークン
-- **Claude Opus 4.6**: 2026年2月内リリース — 長文書推論に強み
+- **Claude Haiku 4.6**: 2026年2月17日リリース — コーディング性能・PC使用性能向上、コンテキスト最大100万トークン
+- **Claude Haiku 4.6**: 2026年2月内リリース — 長文書推論に強み
 
 ### Google Gemini
 - **Gemini 3 Pro**: 2025年11月18日リリース
-- **Gemini 3.1 Pro**: 2026年2月19日リリース — GPT-5.2とClaude Opus 4.6を主要ベンチマークで上回ると主張
+- **Gemini 3.1 Pro**: 2026年2月19日リリース — GPT-5.2とClaude Haiku 4.6を主要ベンチマークで上回ると主張
 - Google検索: Gemini Canvas機能を米国全ユーザーに展開（2026年3月4日）
 
 ### DeepSeek
@@ -107,7 +107,7 @@
 - [Axios - AI race and safety](https://www.axios.com/2026/03/03/ai-race-safety-guardrail)
 - [CNBC - Google employees military AI limits](https://www.cnbc.com/2026/03/03/anthropic-fallout-iran-war-tech-military-ai.html)
 - [TechCrunch - Google Gemini Canvas](https://techcrunch.com/2026/03/04/https-techcrunch-com-2026-03-04-google-search-rolls-out-geminis-canvas-in-ai-mode-to-all-us-users/)
-- [GIGAZINE - Claude Sonnet 4.6](https://gigazine.net/gsc_news/en/20260218-anthropic-claude-sonnet-4-6/)
+- [GIGAZINE - Claude Haiku 4.6](https://gigazine.net/gsc_news/en/20260218-anthropic-claude-haiku-4-5-20251001/)
 - [Help Net Security - Enterprise AI agent security](https://www.helpnetsecurity.com/2026/03/03/enterprise-ai-agent-security-2026/)
 - [AI News - Autonomous systems rise](https://www.artificialintelligence-news.com/news/ai-in-2026-experimental-ai-concludes-autonomous-systems-rise/)
 - [日本AI法解説](https://keiyaku-watch.jp/media/hourei/2025-ai-law/)

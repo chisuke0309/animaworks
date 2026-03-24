@@ -40,7 +40,7 @@ class TestReadModelConfigFromMd:
         mc = reader._read_model_config_from_md()
 
         assert isinstance(mc, ModelConfig)
-        assert mc.model == "claude-sonnet-4-6"
+        assert mc.model == "claude-haiku-4-5-20251001"
         assert mc.max_tokens == 8192
         assert mc.max_turns == 20
 
@@ -53,7 +53,7 @@ class TestReadModelConfigFromMd:
         mc = reader._read_model_config_from_md()
 
         assert isinstance(mc, ModelConfig)
-        assert mc.model == "claude-sonnet-4-6"
+        assert mc.model == "claude-haiku-4-5-20251001"
 
     def test_parses_all_fields(
         self, reader: ConfigReader, anima_dir: Path,
@@ -286,7 +286,7 @@ class TestReadModelConfig:
 
         mock_config = MagicMock()
         mock_resolved = MagicMock()
-        mock_resolved.model = "claude-sonnet-4-6"
+        mock_resolved.model = "claude-haiku-4-5-20251001"
         mock_resolved.fallback_model = None
         mock_resolved.max_tokens = 4096
         mock_resolved.max_turns = 20

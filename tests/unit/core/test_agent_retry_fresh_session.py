@@ -26,7 +26,7 @@ from core.prompt.builder import BuildResult
 # ── Helpers ───────────────────────────────────────────────────
 
 
-def _make_agent(anima_dir: Path, model: str = "claude-sonnet-4-6"):
+def _make_agent(anima_dir: Path, model: str = "claude-haiku-4-5-20251001"):
     """Create AgentCore with all external dependencies mocked."""
     mc = ModelConfig(
         model=model,

@@ -19,9 +19,9 @@ All settings follow the `AnimaWorksConfig` model with these top-level fields:
     "openai": { "api_key": "sk-..." }
   },
   "model_modes": {},
-  "anima_defaults": { "model": "claude-sonnet-4-6", "max_tokens": 4096 },
+  "anima_defaults": { "model": "claude-haiku-4-5-20251001", "max_tokens": 4096 },
   "animas": {
-    "hinata": { "model": "claude-sonnet-4-6", "supervisor": null },
+    "hinata": { "model": "claude-haiku-4-5-20251001", "supervisor": null },
     "ken": { "model": "openai/gpt-4.1", "credential": "openai" }
   },
   "consolidation": { "daily_enabled": true, "daily_time": "02:00" },
@@ -71,7 +71,7 @@ Role of each section:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `model` | `str` | `"claude-sonnet-4-6"` |  |
+| `model` | `str` | `"claude-haiku-4-5-20251001"` |  |
 | `fallback_model` | `str | None` | None |  |
 | `max_tokens` | `int` | `4096` |  |
 | `max_turns` | `int` | `20` |  |
@@ -186,7 +186,7 @@ AnimaWorks has three execution modes. They are determined from model name, but c
 
 Claude models only. Uses Claude Code subprocess for the richest tool execution.
 
-- **Models**: `claude-*` (e.g. `claude-sonnet-4-6`, `claude-opus-4-6`)
+- **Models**: `claude-*` (e.g. `claude-haiku-4-5-20251001`, `claude-haiku-4-5-20251001`)
 - **Features**: File ops, Bash, memory search via Claude Agent SDK
 - **Credential**: Must use `anthropic`
 
@@ -325,7 +325,7 @@ Path: `~/.animaworks/animas/{name}/status.json`
 {
   "enabled": true,
   "role": "engineer",
-  "model": "claude-opus-4-6",
+  "model": "claude-haiku-4-5-20251001",
   "credential": "anthropic",
   "max_tokens": 16384,
   "max_turns": 200,

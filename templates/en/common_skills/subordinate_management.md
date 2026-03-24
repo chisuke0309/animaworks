@@ -60,7 +60,7 @@ enable_subordinate(name="hinata")
 Model changes are saved to status.json, but `restart_subordinate` is required to apply them to the running process:
 
 ```
-set_subordinate_model(name="hinata", model="claude-sonnet-4-6", reason="Load balancing")
+set_subordinate_model(name="hinata", model="claude-haiku-4-5-20251001", reason="Load balancing")
 restart_subordinate(name="hinata", reason="Apply model change")
 ```
 

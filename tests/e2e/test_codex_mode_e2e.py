@@ -190,7 +190,7 @@ class TestNoRegression:
     """Verify existing modes are unaffected by C mode addition."""
 
     def test_s_mode_unchanged(self, make_agent_core):
-        agent = make_agent_core(name="s-mode", model="claude-sonnet-4-6")
+        agent = make_agent_core(name="s-mode", model="claude-haiku-4-5-20251001")
         assert agent._resolve_execution_mode() == "s"
 
     def test_a_mode_unchanged(self, make_agent_core):

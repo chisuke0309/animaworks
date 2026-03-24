@@ -7,7 +7,7 @@ from __future__ import annotations
 """E2E tests for the hardcoded model name consolidation refactoring.
 
 Verifies that all model= parameters that previously defaulted to
-``"anthropic/claude-sonnet-4-6"`` now default to ``""`` (empty string)
+``"anthropic/claude-haiku-4-5-20251001"`` now default to ``""`` (empty string)
 and correctly fall back to ``ConsolidationConfig().llm_model`` or
 ``AnimaDefaults().model`` at runtime.
 
@@ -93,10 +93,10 @@ class TestContextTrackerIntegration:
         """Claude and GPT models have different context windows."""
         from core.prompt.context import ContextTracker, resolve_context_window
 
-        claude_tracker = ContextTracker(model="claude-sonnet-4-6")
+        claude_tracker = ContextTracker(model="claude-haiku-4-5-20251001")
         gpt_tracker = ContextTracker(model="gpt-4o")
 
-        assert claude_tracker.context_window == resolve_context_window("claude-sonnet-4-6")
+        assert claude_tracker.context_window == resolve_context_window("claude-haiku-4-5-20251001")
         assert gpt_tracker.context_window == resolve_context_window("gpt-4o")
         assert claude_tracker.context_window != gpt_tracker.context_window
 
@@ -127,12 +127,12 @@ class TestNoHardcodedModelDefaults:
         return Path(__file__).resolve().parent.parent.parent
 
     def test_no_hardcoded_model_in_function_defaults(self):
-        """No function signature should have anthropic/claude-sonnet-4-* as default."""
+        """No function signature should have anthropic/claude-haiku-4-* as default."""
         root = self._project_root()
 
-        # Pattern: model: str = "anthropic/claude-sonnet-4-*"
+        # Pattern: model: str = "anthropic/claude-haiku-4-*"
         hardcoded_pattern = re.compile(
-            r'model:\s*str\s*=\s*["\']anthropic/claude-sonnet-4'
+            r'model:\s*str\s*=\s*["\']anthropic/claude-haiku-4'
         )
 
         violations: list[str] = []
@@ -154,10 +154,10 @@ class TestNoHardcodedModelDefaults:
         """No local variable should be assigned the old hardcoded model string."""
         root = self._project_root()
 
-        # Pattern: model = "anthropic/claude-sonnet-4-*" as a local assignment
+        # Pattern: model = "anthropic/claude-haiku-4-*" as a local assignment
         # Exclude ConsolidationConfig class definition (llm_model field is expected)
         assignment_pattern = re.compile(
-            r'^\s+model\s*=\s*["\']anthropic/claude-sonnet-4'
+            r'^\s+model\s*=\s*["\']anthropic/claude-haiku-4'
         )
 
         violations: list[str] = []

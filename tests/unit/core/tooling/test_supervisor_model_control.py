@@ -163,7 +163,7 @@ class TestSetSubordinateModel:
         handler = _make_handler(tmp_path, "manager")
 
         result = handler._handle_set_subordinate_model(
-            {"name": "", "model": "claude-sonnet-4-6"}
+            {"name": "", "model": "claude-haiku-4-5-20251001"}
         )
 
         parsed = _parse_error(result)
@@ -197,7 +197,7 @@ class TestSetSubordinateModel:
             return_value=perm_denied,
         ):
             result = handler._handle_set_subordinate_model(
-                {"name": "stranger", "model": "claude-sonnet-4-6"}
+                {"name": "stranger", "model": "claude-haiku-4-5-20251001"}
             )
 
         # Result must be the PermissionDenied error unchanged
@@ -225,7 +225,7 @@ class TestRestartSubordinate:
         target_dir = self._make_target_dir(tmp_path, "engineer")
         status_file = target_dir / "status.json"
         status_file.write_text(
-            json.dumps({"enabled": True, "model": "claude-sonnet-4-6"}),
+            json.dumps({"enabled": True, "model": "claude-haiku-4-5-20251001"}),
             encoding="utf-8",
         )
 
@@ -253,7 +253,7 @@ class TestRestartSubordinate:
         assert updated["restart_requested"] is True
         # Existing fields must be preserved
         assert updated["enabled"] is True
-        assert updated["model"] == "claude-sonnet-4-6"
+        assert updated["model"] == "claude-haiku-4-5-20251001"
 
     def test_restart_creates_status_if_missing(self, tmp_path: Path):
         """If status.json does not exist, it is created with restart_requested: true."""

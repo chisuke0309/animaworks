@@ -132,7 +132,7 @@ cursor-agent -p --trust --force --workspace /path/to/workspace "prompt"
 | `--trust` | Auto-trust workspace |
 | `--force` | Auto-approve commands |
 | `--workspace /path` | Working directory (required) |
-| `--model model` | Model (e.g., `sonnet-4`, `gpt-5`) |
+| `--model model` | Model (e.g., `haiku-4`, `gpt-5`) |
 | `--output-format text\|json` | Output format |
 | `--mode plan\|ask` | Read-only mode (for investigation) |
 
@@ -183,7 +183,7 @@ claude -p --dangerously-skip-permissions --output-format text "prompt"
 |--------|-------------|
 | `-p` / `--print` | Non-interactive mode (required) |
 | `--dangerously-skip-permissions` | Skip permission check |
-| `--model model` | Model (e.g., `sonnet`, `haiku`) |
+| `--model model` | Model (e.g., `haiku`, `haiku`) |
 | `--allowedTools "tools"` | Restrict allowed tools (e.g., `"Read Edit Bash(git:*)"`) |
 | `--output-format text\|json` | Output format |
 | `--max-budget-usd N` | Cost cap (USD) |

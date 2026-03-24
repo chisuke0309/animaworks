@@ -26,7 +26,7 @@ class TestUpdateStatusModel:
         anima_dir.mkdir()
         status_path = anima_dir / "status.json"
         status_path.write_text(
-            json.dumps({"model": "claude-sonnet", "enabled": True}),
+            json.dumps({"model": "claude-haiku", "enabled": True}),
             encoding="utf-8",
         )
         update_status_model(anima_dir, model="openai/gpt-4o")
@@ -40,12 +40,12 @@ class TestUpdateStatusModel:
         anima_dir.mkdir()
         status_path = anima_dir / "status.json"
         status_path.write_text(
-            json.dumps({"model": "claude-sonnet", "credential": "anthropic"}),
+            json.dumps({"model": "claude-haiku", "credential": "anthropic"}),
             encoding="utf-8",
         )
         update_status_model(anima_dir, credential="openai")
         data = json.loads(status_path.read_text(encoding="utf-8"))
-        assert data["model"] == "claude-sonnet"
+        assert data["model"] == "claude-haiku"
         assert data["credential"] == "openai"
 
     def test_updates_both(self, tmp_path: Path) -> None:

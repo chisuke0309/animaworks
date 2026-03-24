@@ -241,7 +241,7 @@ class TestExtractPrompt:
         ]
 
         mock_model_config = MagicMock()
-        mock_model_config.model = "anthropic/claude-sonnet-4-6"
+        mock_model_config.model = "anthropic/claude-haiku-4-5-20251001"
         mock_model_config.api_key = "test-key"
         mock_model_config.api_key_env = "ANTHROPIC_API_KEY"
         mock_model_config.api_base_url = None
@@ -270,7 +270,7 @@ class TestExtractPrompt:
         ]
 
         mock_model_config = MagicMock()
-        mock_model_config.model = "anthropic/claude-sonnet-4-6"
+        mock_model_config.model = "anthropic/claude-haiku-4-5-20251001"
         mock_model_config.api_key = "test-key"
         mock_model_config.api_key_env = "ANTHROPIC_API_KEY"
         mock_model_config.api_base_url = None
@@ -296,7 +296,7 @@ class TestExtractPrompt:
         )
 
         mock_model_config = MagicMock()
-        mock_model_config.model = "anthropic/claude-sonnet-4-6"
+        mock_model_config.model = "anthropic/claude-haiku-4-5-20251001"
         mock_model_config.api_key = "test-key"
         mock_model_config.api_key_env = "ANTHROPIC_API_KEY"
         mock_model_config.api_base_url = None

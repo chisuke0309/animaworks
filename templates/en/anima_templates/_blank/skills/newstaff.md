@@ -39,11 +39,11 @@ Present this table for selection:
 
 | Level | Execution Mode | Example Models | Features | credential |
 |--------|-----------|-------------|------|------------|
-| S | autonomous | `claude-opus-4-6`, `claude-sonnet-4-6` | Claude Agent SDK. Most capable | anthropic |
+| S | autonomous | `claude-haiku-4-5-20251001`, `claude-haiku-4-5-20251001` | Claude Agent SDK. Most capable | anthropic |
 | A | autonomous | `openai/gpt-4.1`, `google/gemini-2.5-pro`, `vertex_ai/gemini-2.5-flash` | Via LiteLLM. Tool use supported | openai / google / azure / vertex |
 | B | assisted | `ollama/gemma3:27b`, `ollama/qwen2.5-coder:32b` | No tools. Local execution, low cost | ollama |
 
-※ If not specified, use defaults (claude-sonnet-4 / autonomous / anthropic).
+※ If not specified, use defaults (claude-haiku-4 / autonomous / anthropic).
 
 ### 2. Character Design (Auto-generated)
 

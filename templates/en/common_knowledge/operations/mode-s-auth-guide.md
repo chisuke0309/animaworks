@@ -45,7 +45,7 @@ Connect directly to Anthropic API. Provides the smoothest streaming experience.
 
 ```json
 {
-  "model": "claude-sonnet-4-6",
+  "model": "claude-haiku-4-5-20251001",
   "credential": "anthropic",
   "mode_s_auth": "api"
 }
@@ -78,7 +78,7 @@ Connect via AWS Bedrock.
 
 ```json
 {
-  "model": "claude-sonnet-4-6",
+  "model": "claude-haiku-4-5-20251001",
   "credential": "bedrock",
   "execution_mode": "S",
   "mode_s_auth": "bedrock"
@@ -111,7 +111,7 @@ Connect via Google Vertex AI.
 
 ```json
 {
-  "model": "claude-sonnet-4-6",
+  "model": "claude-haiku-4-5-20251001",
   "credential": "vertex",
   "execution_mode": "S",
   "mode_s_auth": "vertex"
@@ -138,7 +138,7 @@ Uses Claude Code subscription authentication (Max plan etc.).
 
 ```json
 {
-  "model": "claude-sonnet-4-6",
+  "model": "claude-haiku-4-5-20251001",
   "credential": "max"
 }
 ```

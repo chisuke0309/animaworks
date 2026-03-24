@@ -585,7 +585,7 @@ class TestFullPipelineCreateAndRegister:
 | 上司 | sakura |
 | 役割 | worker |
 | 実行モード | autonomous |
-| モデル | claude-sonnet-4-6 |
+| モデル | claude-haiku-4-5-20251001 |
 | credential | anthropic |
 
 ## 人格
@@ -640,7 +640,7 @@ class TestFullPipelineCreateAndRegister:
 | 上司 | (なし) |
 | 役割 | manager |
 | 実行モード | autonomous |
-| モデル | claude-sonnet-4-6 |
+| モデル | claude-haiku-4-5-20251001 |
 | credential | anthropic |
 
 ## 人格
@@ -692,7 +692,7 @@ class TestFullPipelineCreateAndRegister:
 | 上司 | 琴葉（kotoha） |
 | 役割 | worker |
 | 実行モード | autonomous |
-| モデル | claude-sonnet-4-6 |
+| モデル | claude-haiku-4-5-20251001 |
 | credential | anthropic |
 
 ## 人格
@@ -744,7 +744,7 @@ class TestFullPipelineCreateAndRegister:
 | 上司 | (なし) |
 | 役割 | manager |
 | 実行モード | autonomous |
-| モデル | claude-sonnet-4-6 |
+| モデル | claude-haiku-4-5-20251001 |
 | credential | anthropic |
 
 ## 人格
@@ -773,7 +773,7 @@ class TestFullPipelineCreateAndRegister:
 | 上司 | manager |
 | 役割 | worker |
 | 実行モード | autonomous |
-| モデル | claude-sonnet-4-6 |
+| モデル | claude-haiku-4-5-20251001 |
 | credential | anthropic |
 
 ## 人格

@@ -27,7 +27,7 @@ def anima_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def model_config() -> ModelConfig:
     """Create a minimal ModelConfig for testing."""
-    return ModelConfig(model="claude-sonnet-4-6")
+    return ModelConfig(model="claude-haiku-4-5-20251001")
 
 
 class TestConversationMemoryThreadIsolation:

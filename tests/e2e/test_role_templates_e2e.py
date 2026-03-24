@@ -150,7 +150,7 @@ class TestCreateFromMdEngineerRole:
             (anima_dir / "status.json").read_text(encoding="utf-8")
         )
         # Engineer defaults.json specifies these values
-        assert status["model"] == "claude-opus-4-6"
+        assert status["model"] == "claude-haiku-4-5-20251001"
         assert status["max_turns"] == 200
         assert status["max_chains"] == 10
         assert status["context_threshold"] == 0.80
@@ -169,7 +169,7 @@ class TestCreateFromMdEngineerRole:
 | 項目 | 設定 |
 |------|------|
 | 英名 | testeng2 |
-| モデル | claude-sonnet-4-6 |
+| モデル | claude-haiku-4-5-20251001 |
 | 上司 | (なし) |
 | 実行モード | autonomous |
 
@@ -190,7 +190,7 @@ class TestCreateFromMdEngineerRole:
             (anima_dir / "status.json").read_text(encoding="utf-8")
         )
         # Character sheet model should override role default
-        assert status["model"] == "claude-sonnet-4-6"
+        assert status["model"] == "claude-haiku-4-5-20251001"
         # But other role defaults should still be applied
         assert status["max_turns"] == 200
         assert status["max_chains"] == 10
@@ -241,7 +241,7 @@ class TestCreateFromMdGeneralRole:
             (anima_dir / "status.json").read_text(encoding="utf-8")
         )
         # general defaults.json values
-        assert status["model"] == "claude-sonnet-4-6"
+        assert status["model"] == "claude-haiku-4-5-20251001"
         assert status["max_turns"] == 20
         assert status["max_chains"] == 2
         assert status["context_threshold"] == 0.50
@@ -305,7 +305,7 @@ class TestTwoLayerConfigResolution:
         model_config = memory.read_model_config()
 
         # Engineer role defaults in status.json should override global defaults
-        assert model_config.model == "claude-opus-4-6"
+        assert model_config.model == "claude-haiku-4-5-20251001"
         assert model_config.max_turns == 200
         assert model_config.max_chains == 10
         assert model_config.context_threshold == 0.80
@@ -324,7 +324,7 @@ class TestTwoLayerConfigResolution:
         import json
         status_path = anima_dir / "status.json"
         status_data = json.loads(status_path.read_text(encoding="utf-8"))
-        status_data["model"] = "claude-sonnet-4-6"
+        status_data["model"] = "claude-haiku-4-5-20251001"
         status_data["max_turns"] = 50
         status_path.write_text(
             json.dumps(status_data, indent=2, ensure_ascii=False) + "\n",
@@ -336,7 +336,7 @@ class TestTwoLayerConfigResolution:
         model_config = memory.read_model_config()
 
         # Updated fields from status.json
-        assert model_config.model == "claude-sonnet-4-6"
+        assert model_config.model == "claude-haiku-4-5-20251001"
         assert model_config.max_turns == 50
         # Non-updated fields still come from original status.json (engineer role)
         assert model_config.max_chains == 10
@@ -367,7 +367,7 @@ class TestTwoLayerConfigResolution:
 
         # Layer 1: status.json (engineer role defaults + our override)
         assert resolved.max_turns == 99
-        assert resolved.model == "claude-opus-4-6"
+        assert resolved.model == "claude-haiku-4-5-20251001"
         assert resolved.max_chains == 10
         assert resolved.context_threshold == 0.80
         # Layer 2: global defaults (for fields not set in status.json)

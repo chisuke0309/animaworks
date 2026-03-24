@@ -45,7 +45,7 @@ animaworks anima delete <name>
 animaworks anima restart tsumugi
 
 # Change model and auto restart
-animaworks anima set-model tsumugi claude-sonnet-4-6
+animaworks anima set-model tsumugi claude-haiku-4-5-20251001
 ```
 
 ## API Reference (When CLI Unavailable)

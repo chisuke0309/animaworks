@@ -43,7 +43,7 @@ class TestReloadConfigE2E:
         """Modify status.json model field and verify reload applies it."""
         anima_dir = make_anima(
             "reload-test",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             credential="anthropic",
         )
         shared_dir = data_dir / "shared"
@@ -51,9 +51,9 @@ class TestReloadConfigE2E:
         from core.anima import DigitalAnima
 
         anima = DigitalAnima(anima_dir=anima_dir, shared_dir=shared_dir)
-        assert anima.model_config.model == "claude-sonnet-4-6"
+        assert anima.model_config.model == "claude-haiku-4-5-20251001"
 
-        _write_status_json(anima_dir, model="claude-opus-4-6")
+        _write_status_json(anima_dir, model="claude-haiku-4-5-20251001")
 
         from core.config import invalidate_cache
         invalidate_cache()
@@ -61,16 +61,16 @@ class TestReloadConfigE2E:
         result = anima.reload_config()
 
         assert result["status"] == "ok"
-        assert result["model"] == "claude-opus-4-6"
+        assert result["model"] == "claude-haiku-4-5-20251001"
         assert "model" in result["changes"]
-        assert anima.model_config.model == "claude-opus-4-6"
-        assert anima.agent.model_config.model == "claude-opus-4-6"
+        assert anima.model_config.model == "claude-haiku-4-5-20251001"
+        assert anima.agent.model_config.model == "claude-haiku-4-5-20251001"
 
     def test_reload_picks_up_max_tokens_change(self, data_dir, make_anima):
         """Modify max_tokens and verify reload detects the change."""
         anima_dir = make_anima(
             "reload-tokens",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             credential="anthropic",
         )
         shared_dir = data_dir / "shared"
@@ -95,7 +95,7 @@ class TestReloadConfigE2E:
         """When status.json is unchanged, changes list should be empty."""
         anima_dir = make_anima(
             "reload-noop",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             credential="anthropic",
         )
         shared_dir = data_dir / "shared"
@@ -116,7 +116,7 @@ class TestReloadConfigE2E:
         """Enable thinking via status.json reload."""
         anima_dir = make_anima(
             "reload-thinking",
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             credential="anthropic",
         )
         shared_dir = data_dir / "shared"

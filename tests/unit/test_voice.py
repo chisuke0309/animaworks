@@ -505,7 +505,7 @@ class TestPerAnimaVoice:
         (anima_dir / "status.json").write_text(
             json.dumps({
                 "enabled": True,
-                "model": "claude-sonnet-4-6",
+                "model": "claude-haiku-4-5-20251001",
                 "voice": {
                     "tts_provider": "elevenlabs",
                     "voice_id": "abc123",
@@ -528,7 +528,7 @@ class TestPerAnimaVoice:
         anima_dir = animas_dir / "test_anima"
         anima_dir.mkdir(parents=True)
         (anima_dir / "status.json").write_text(
-            json.dumps({"enabled": True, "model": "claude-sonnet-4-6"})
+            json.dumps({"enabled": True, "model": "claude-haiku-4-5-20251001"})
         )
 
         tts_config = _load_per_anima_voice(animas_dir, "test_anima", VoiceConfig())

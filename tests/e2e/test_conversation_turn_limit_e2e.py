@@ -32,7 +32,7 @@ from core.schemas import ModelConfig
 def _make_conv_memory(
     anima_dir: Path,
     *,
-    model: str = "claude-sonnet-4-6",
+    model: str = "claude-haiku-4-5-20251001",
     conversation_history_threshold: float = 0.30,
 ) -> ConversationMemory:
     """Create a ConversationMemory backed by a real temp directory."""
