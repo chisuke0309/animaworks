@@ -76,7 +76,7 @@ class AnimaModelConfig(BaseModel):
 
 
 # ── Default model names (single source of truth) ─────────────────────────────
-DEFAULT_ANIMA_MODEL: str = "claude-sonnet-4-6"
+DEFAULT_ANIMA_MODEL: str = "claude-haiku-4-5-20251001"
 DEFAULT_CONSOLIDATION_MODEL: str = f"anthropic/{DEFAULT_ANIMA_MODEL}"
 
 
@@ -105,6 +105,8 @@ class RAGConfig(BaseModel):
 
     enabled: bool = True
     embedding_model: str = "intfloat/multilingual-e5-small"
+    embedding_api_base: str = ""  # OpenAI-compatible embedding API (e.g. LM Studio: http://localhost:1234/v1)
+    embedding_api_key: str = ""   # API key for embedding endpoint
     use_gpu: bool = False
     enable_spreading_activation: bool = True
     max_graph_hops: int = 2
@@ -148,6 +150,8 @@ class ConsolidationConfig(BaseModel):
     daily_time: str = "02:00"  # Format: HH:MM
     min_episodes_threshold: int = 1
     llm_model: str = DEFAULT_CONSOLIDATION_MODEL
+    llm_api_base: str = ""  # Custom API base URL (e.g. LM Studio: http://localhost:1234/v1)
+    llm_api_key: str = ""   # API key for custom endpoint (use any non-empty string for LM Studio)
     max_turns: int = 30  # Tool-call loop limit for consolidation tasks
     weekly_enabled: bool = True  # Phase 3 implementation
     weekly_time: str = "sun:03:00"  # Format: day:HH:MM
@@ -623,7 +627,7 @@ def resolve_anima_config(
 #
 # IMPORTANT: When status.json omits "execution_mode", resolve_execution_mode()
 # falls through to these patterns to determine the mode from the model name.
-# For example, "claude-sonnet-4-6" matches "claude-*" → Mode S.
+# For example, "claude-haiku-4-5-20251001" matches "claude-*" → Mode S.
 # An anima can override this by setting execution_mode explicitly in status.json
 # (e.g. bedrock/* defaults to A, but mei uses execution_mode="S" to force Mode S).
 DEFAULT_MODEL_MODE_PATTERNS: dict[str, str] = {
@@ -685,15 +689,15 @@ DEFAULT_MODEL_MODES = DEFAULT_MODEL_MODE_PATTERNS
 # informational and does NOT restrict which models can be used.
 KNOWN_MODELS: list[dict[str, str]] = [
     # ── Claude / Anthropic (Mode S) ──────────────────────────────────────────
-    {"name": "claude-opus-4-6",              "mode": "S", "note": "最高性能・推奨"},
-    {"name": "claude-sonnet-4-6",            "mode": "S", "note": "バランス型・推奨"},
+    {"name": "claude-haiku-4-5-20251001",              "mode": "S", "note": "最高性能・推奨"},
+    {"name": "claude-haiku-4-5-20251001",            "mode": "S", "note": "バランス型・推奨"},
     {"name": "claude-haiku-4-5-20251001",    "mode": "S", "note": "軽量・高速"},
     # Legacy (still available)
-    {"name": "claude-opus-4-5-20251101",     "mode": "S", "note": "旧フラッグシップ"},
-    {"name": "claude-opus-4-1-20250805",     "mode": "S", "note": "旧Opus"},
-    {"name": "claude-sonnet-4-5-20250929",   "mode": "S", "note": "旧Sonnet"},
-    {"name": "claude-sonnet-4-20250514",     "mode": "S", "note": "旧Sonnet4"},
-    {"name": "claude-opus-4-20250514",       "mode": "S", "note": "旧Opus4"},
+    {"name": "claude-haiku-4-5-20251001-20251101",     "mode": "S", "note": "旧フラッグシップ"},
+    {"name": "claude-haiku-4-5-20251001-20250805",     "mode": "S", "note": "旧Haiku"},
+    {"name": "claude-haiku-4-5-20251001-20250929",   "mode": "S", "note": "旧Haiku"},
+    {"name": "claude-haiku-4-5-20251001",     "mode": "S", "note": "旧Haiku4"},
+    {"name": "claude-haiku-4-5-20251001",       "mode": "S", "note": "旧Haiku4"},
     # ── OpenAI (Mode A) ──────────────────────────────────────────────────────
     {"name": "openai/gpt-4.1",               "mode": "A", "note": "最新・コーディング強"},
     {"name": "openai/gpt-4.1-mini",          "mode": "A", "note": "高速・低コスト"},
@@ -963,7 +967,7 @@ def resolve_execution_mode(
 
     When ``status.json`` omits ``execution_mode``, this function determines
     the mode automatically from the model name.  For example,
-    ``claude-sonnet-4-6`` matches the ``"claude-*": "S"`` pattern and runs
+    ``claude-haiku-4-5-20251001`` matches the ``"claude-*": "S"`` pattern and runs
     in Mode S without an explicit setting.
 
     Priority:
@@ -975,8 +979,8 @@ def resolve_execution_mode(
 
     Args:
         config: Global AnimaWorks configuration.
-        model_name: Model identifier (e.g. ``"claude-sonnet-4-6"``,
-            ``"bedrock/jp.anthropic.claude-sonnet-4-6"``).
+        model_name: Model identifier (e.g. ``"claude-haiku-4-5-20251001"``,
+            ``"bedrock/jp.anthropic.claude-haiku-4-5-20251001"``).
         explicit_override: Per-anima ``execution_mode`` from ``status.json``.
             When set, takes highest priority.
 
@@ -1023,7 +1027,7 @@ def resolve_context_window(
          defaults)
 
     Args:
-        model_name: The model name to resolve (e.g. ``"claude-sonnet-4-6"``).
+        model_name: The model name to resolve (e.g. ``"claude-haiku-4-5-20251001"``).
         config: Optional config instance.  Loaded lazily if not provided.
 
     Returns:

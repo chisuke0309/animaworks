@@ -65,6 +65,8 @@ class ProceduralDistiller:
         self,
         episodes_text: str,
         model: str = "",
+        api_base: str = "",
+        api_key: str = "",
     ) -> dict:
         """Classify episodes and extract both knowledge and procedures via LLM.
 
@@ -85,7 +87,10 @@ class ProceduralDistiller:
         """
         if not model:
             from core.config.models import ConsolidationConfig
-            model = ConsolidationConfig().llm_model
+            cfg = ConsolidationConfig()
+            model = cfg.llm_model
+            api_base = api_base or cfg.llm_api_base
+            api_key = api_key or cfg.llm_api_key
 
         result = {
             "knowledge_items": [],
@@ -107,10 +112,17 @@ class ProceduralDistiller:
         try:
             import litellm
 
+            extra: dict = {}
+            if api_base:
+                extra["api_base"] = api_base
+            if api_key:
+                extra["api_key"] = api_key
+
             response = cast(Any, await litellm.acompletion(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=3072,
+                **extra,
             ))
             text = response.choices[0].message.content or ""
             text = self._strip_code_fence(text)
@@ -205,6 +217,8 @@ class ProceduralDistiller:
     async def weekly_pattern_distill(
         self,
         model: str = "",
+        api_base: str = "",
+        api_key: str = "",
         days: int = 7,
     ) -> dict:
         """Detect repeated action patterns from activity_log and distill.
@@ -223,7 +237,10 @@ class ProceduralDistiller:
         """
         if not model:
             from core.config.models import ConsolidationConfig
-            model = ConsolidationConfig().llm_model
+            cfg = ConsolidationConfig()
+            model = cfg.llm_model
+            api_base = api_base or cfg.llm_api_base
+            api_key = api_key or cfg.llm_api_key
 
         # 1. Load activity entries
         entries = self._load_activity_entries(days=days)
@@ -271,10 +288,17 @@ class ProceduralDistiller:
         try:
             import litellm
 
+            extra: dict = {}
+            if api_base:
+                extra["api_base"] = api_base
+            if api_key:
+                extra["api_key"] = api_key
+
             response = cast(Any, await litellm.acompletion(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2048,
+                **extra,
             ))
             text = response.choices[0].message.content or "[]"
             procedures = self._parse_procedures(text)
