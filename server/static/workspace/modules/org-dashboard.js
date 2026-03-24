@@ -149,12 +149,30 @@ export async function initOrgDashboard(container, animas, { onNodeClick } = {}) 
   container.innerHTML = `
     <div class="org-dashboard">
       <div class="org-col-main">
-        <div class="org-section-title">組織</div>
+        <div class="org-section-title">
+          <button class="org-goals-btn" id="orgGoalsBtn" title="組織目標を表示">組織 <span class="org-goals-icon">🎯</span></button>
+        </div>
         <div class="org-itree">${treeHtml}</div>
       </div>
       <div class="org-col-right">
         <div class="org-section-title">アクティビティ</div>
         <div class="org-activity-feed" id="orgActivityFeed"></div>
+      </div>
+    </div>
+    <!-- Goals Panel -->
+    <div class="org-goals-panel hidden" id="orgGoalsPanel">
+      <div class="org-goals-panel-header">
+        <span>🎯 組織目標</span>
+        <div class="org-goals-panel-actions">
+          <button class="org-goals-edit-btn" id="orgGoalsEditBtn">編集</button>
+          <button class="org-goals-save-btn hidden" id="orgGoalsSaveBtn">保存</button>
+          <button class="org-goals-cancel-btn hidden" id="orgGoalsCancelBtn">✕</button>
+          <button class="org-goals-close-btn" id="orgGoalsCloseBtn">✕ 閉じる</button>
+        </div>
+      </div>
+      <div class="org-goals-panel-body">
+        <div id="orgGoalsContent" class="org-goals-content"></div>
+        <textarea id="orgGoalsEditor" class="org-goals-editor hidden"></textarea>
       </div>
     </div>
   `;
@@ -186,14 +204,107 @@ export async function initOrgDashboard(container, animas, { onNodeClick } = {}) 
     const name = node.dataset.name;
     if (!name) return;
 
-    // Visual highlight
     container.querySelectorAll(".org-itree-node.selected").forEach(el => el.classList.remove("selected"));
     node.classList.add("selected");
 
     if (_onNodeClick) _onNodeClick(name);
   });
 
+  // Goals panel
+  document.getElementById("orgGoalsBtn").addEventListener("click", openGoalsPanel);
+  document.getElementById("orgGoalsCloseBtn").addEventListener("click", closeGoalsPanel);
+  document.getElementById("orgGoalsEditBtn").addEventListener("click", startGoalsEdit);
+  document.getElementById("orgGoalsSaveBtn").addEventListener("click", saveGoals);
+  document.getElementById("orgGoalsCancelBtn").addEventListener("click", cancelGoalsEdit);
+
   logger.info("Org dashboard initialized", { animaCount: animas.length });
+}
+
+// ── Goals Panel ───────────────────────────
+
+let _goalsContent = "";
+
+async function openGoalsPanel() {
+  const panel = document.getElementById("orgGoalsPanel");
+  const content = document.getElementById("orgGoalsContent");
+  panel.classList.remove("hidden");
+  content.innerHTML = `<div style="padding:1rem;color:#888">読み込み中...</div>`;
+  try {
+    const resp = await fetch("/api/common-knowledge/organization/goals.md");
+    const data = await resp.json();
+    _goalsContent = data.content || "";
+    renderGoalsView();
+  } catch (e) {
+    content.innerHTML = `<div style="padding:1rem;color:red">読み込み失敗: ${e.message}</div>`;
+  }
+}
+
+function closeGoalsPanel() {
+  const panel = document.getElementById("orgGoalsPanel");
+  panel.classList.add("hidden");
+  cancelGoalsEdit();
+}
+
+function renderGoalsView() {
+  document.getElementById("orgGoalsContent").innerHTML = simpleMarkdown(_goalsContent);
+  document.getElementById("orgGoalsContent").classList.remove("hidden");
+  document.getElementById("orgGoalsEditor").classList.add("hidden");
+  document.getElementById("orgGoalsEditBtn").classList.remove("hidden");
+  document.getElementById("orgGoalsSaveBtn").classList.add("hidden");
+  document.getElementById("orgGoalsCancelBtn").classList.add("hidden");
+}
+
+function startGoalsEdit() {
+  document.getElementById("orgGoalsEditor").value = _goalsContent;
+  document.getElementById("orgGoalsContent").classList.add("hidden");
+  document.getElementById("orgGoalsEditor").classList.remove("hidden");
+  document.getElementById("orgGoalsEditBtn").classList.add("hidden");
+  document.getElementById("orgGoalsSaveBtn").classList.remove("hidden");
+  document.getElementById("orgGoalsCancelBtn").classList.remove("hidden");
+}
+
+async function saveGoals() {
+  const btn = document.getElementById("orgGoalsSaveBtn");
+  _goalsContent = document.getElementById("orgGoalsEditor").value;
+  btn.textContent = "保存中...";
+  btn.disabled = true;
+  try {
+    await fetch("/api/common-knowledge/organization/goals.md", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: _goalsContent }),
+    });
+    renderGoalsView();
+  } catch (e) {
+    alert(`保存失敗: ${e.message}`);
+  } finally {
+    btn.textContent = "保存";
+    btn.disabled = false;
+  }
+}
+
+function cancelGoalsEdit() {
+  renderGoalsView();
+}
+
+function simpleMarkdown(md) {
+  return md
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^---$/gm, "<hr>")
+    .replace(/^\| ?(.+?) ?\|$/gm, (line) => {
+      if (/^[\s|:-]+$/.test(line)) return "";
+      const cells = line.split("|").filter((_, i, a) => i > 0 && i < a.length - 1);
+      return "<tr>" + cells.map(c => `<td>${c.trim()}</td>`).join("") + "</tr>";
+    })
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*?<\/li>\s*)+/gs, m => `<ul>${m}</ul>`)
+    .replace(/(<tr>.*?<\/tr>\s*)+/gs, m => `<table class="org-goals-table">${m}</table>`)
+    .replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")
+    .replace(/^/, "<p>").replace(/$/, "</p>");
 }
 
 export function disposeOrgDashboard() {

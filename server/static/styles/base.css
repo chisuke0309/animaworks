@@ -559,3 +559,22 @@ body {
   flex-wrap: wrap;
   align-items: center;
 }
+
+/* ── Goals Page ─────────────────────────────── */
+.goals-page { display: flex; flex-direction: column; height: 100%; padding: 1.5rem; gap: 1rem; }
+.goals-header { display: flex; align-items: center; justify-content: space-between; }
+.goals-header h2 { margin: 0; font-size: 1.25rem; }
+.goals-actions { display: flex; gap: 0.5rem; }
+.goals-body { flex: 1; overflow-y: auto; }
+.goals-markdown { line-height: 1.8; }
+.goals-markdown h1 { font-size: 1.4rem; margin: 1.2rem 0 0.5rem; }
+.goals-markdown h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid var(--aw-color-border, #e2e8f0); padding-bottom: 0.3rem; }
+.goals-markdown h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
+.goals-markdown hr { border: none; border-top: 1px solid var(--aw-color-border, #e2e8f0); margin: 1rem 0; }
+.goals-markdown ul { padding-left: 1.5rem; margin: 0.5rem 0; }
+.goals-markdown li { margin: 0.2rem 0; }
+.goals-table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; font-size: 0.9rem; }
+.goals-table td { border: 1px solid var(--aw-color-border, #e2e8f0); padding: 0.4rem 0.75rem; }
+.goals-table tr:first-child td { background: var(--aw-color-bg-secondary, #f8fafc); font-weight: 600; }
+.goals-textarea { width: 100%; height: calc(100vh - 160px); font-family: monospace; font-size: 0.875rem; padding: 1rem; border: 1px solid var(--aw-color-border, #e2e8f0); border-radius: 6px; resize: vertical; background: var(--aw-color-bg-primary, #fff); color: inherit; line-height: 1.6; }
+

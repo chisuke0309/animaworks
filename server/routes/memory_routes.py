@@ -186,6 +186,36 @@ def create_memory_router() -> APIRouter:
             "total_token_estimate": state.total_token_estimate,
         }
 
+    # ── Common Knowledge ──────────────────────────────────
+
+    @router.get("/common-knowledge/{path:path}")
+    async def get_common_knowledge(path: str, request: Request):
+        from core.paths import get_common_knowledge_dir
+        ck_dir = get_common_knowledge_dir()
+        file_path = (ck_dir / path).resolve()
+        if not str(file_path).startswith(str(ck_dir.resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
+        return {"path": path, "content": content}
+
+    @router.put("/common-knowledge/{path:path}")
+    async def put_common_knowledge(path: str, request: Request):
+        from core.paths import get_common_knowledge_dir
+        body = await request.json()
+        content = body.get("content", "")
+        ck_dir = get_common_knowledge_dir()
+        file_path = (ck_dir / path).resolve()
+        if not str(file_path).startswith(str(ck_dir.resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+        return {"path": path, "status": "saved"}
+
     # ── Stats ─────────────────────────────────────────────
 
     @router.get("/animas/{name}/memory/stats")

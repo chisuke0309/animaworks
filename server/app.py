@@ -39,6 +39,7 @@ logger = logging.getLogger("animaworks.server")
 _NOISY_PATHS = frozenset({
     "/api/system/health",
     "/api/system/status",
+    "/api/internal/embed",
     "/ws",
 })
 
@@ -149,6 +150,17 @@ async def _startup_animas_background(app: FastAPI) -> None:
             logger.exception("Slack Socket Mode startup failed")
             app.state.slack_socket_manager = None
 
+        # ── Telegram Poller ───────────────────────────────────
+        try:
+            from server.telegram_poller import TelegramPollerManager
+
+            telegram_poller = TelegramPollerManager()
+            await telegram_poller.start()
+            app.state.telegram_poller = telegram_poller
+        except Exception:
+            logger.exception("Telegram poller startup failed")
+            app.state.telegram_poller = None
+
         logger.info("All anima processes started")
 
     except asyncio.CancelledError:
@@ -244,6 +256,8 @@ async def lifespan(app: FastAPI):
         await app.state.stream_registry.stop_cleanup_loop()
         if getattr(app.state, "slack_socket_manager", None):
             await app.state.slack_socket_manager.stop()
+        if getattr(app.state, "telegram_poller", None):
+            await app.state.telegram_poller.stop()
         await app.state.supervisor.shutdown_all()
         if hasattr(app.state, "msg_log_scheduler"):
             app.state.msg_log_scheduler.shutdown(wait=False)

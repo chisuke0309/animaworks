@@ -3,6 +3,7 @@ from __future__ import annotations
 # Copyright (C) 2026 AnimaWorks Authors
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -23,8 +24,38 @@ class MessageSentNotification(BaseModel):
     message_id: str = ""
 
 
+class EmbedRequest(BaseModel):
+    texts: list[str]
+    model_name: str | None = None
+
+
 def create_internal_router() -> APIRouter:
     router = APIRouter()
+
+    @router.post("/internal/embed")
+    async def embed(body: EmbedRequest):
+        """Generate embeddings using the server-side singleton model.
+
+        Called by anima worker processes so they never load the model locally,
+        keeping each worker's memory footprint small.
+        """
+        from core.memory.rag.singleton import get_embedding_model
+
+        loop = asyncio.get_event_loop()
+
+        def _encode() -> tuple[list[list[float]], int]:
+            model = get_embedding_model(body.model_name)
+            embeddings = model.encode(
+                body.texts,
+                convert_to_numpy=True,
+                show_progress_bar=False,
+            )
+            dim = model.get_sentence_embedding_dimension()
+            return [emb.tolist() for emb in embeddings], dim
+
+        embeddings, dimension = await loop.run_in_executor(None, _encode)
+        return {"embeddings": embeddings, "dimension": dimension}
+
 
     @router.post("/internal/message-sent")
     async def internal_message_sent(

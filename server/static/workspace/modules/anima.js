@@ -41,8 +41,8 @@ function modelAlias(model) {
   if (!model) return "";
   const m = model.toLowerCase();
   // S: Claude models
-  if (m.includes("opus")) return "Opus";
-  if (m.includes("sonnet")) return "Sonnet";
+  if (m.includes("haiku")) return "Haiku";
+  if (m.includes("haiku")) return "Haiku";
   if (m.includes("haiku")) return "Haiku";
   // A: OpenAI
   if (m.includes("gpt-4o")) return "GPT-4o";

@@ -3076,6 +3076,7 @@ html, body {
   display: flex;
   height: 100%;
   gap: 0;
+  position: relative;
   background: var(--aw-color-bg-secondary, #f5f5f5);
 }
 
@@ -3338,6 +3339,138 @@ html, body {
   color: var(--aw-color-text-faint, #999);
   font-size: 11px;
   white-space: nowrap;
+}
+
+/* ── Org Goals Button ────────────────────── */
+.org-goals-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--aw-color-text-muted, #888);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+}
+.org-goals-btn:hover {
+  color: var(--aw-color-primary, #5b6af8);
+}
+.org-goals-icon {
+  font-size: 13px;
+}
+
+/* ── Org Goals Panel ─────────────────────── */
+.org-goals-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--aw-color-bg, #fff);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.org-goals-panel.hidden {
+  display: none;
+}
+.org-goals-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--aw-color-border, #e5e5e5);
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.org-goals-panel-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.org-goals-edit-btn,
+.org-goals-save-btn,
+.org-goals-cancel-btn,
+.org-goals-close-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--aw-color-border, #e5e5e5);
+  cursor: pointer;
+  background: var(--aw-color-bg-secondary, #f8fafc);
+  color: var(--aw-color-text, #222);
+  transition: background 0.12s;
+}
+.org-goals-save-btn {
+  background: var(--aw-color-primary, #5b6af8);
+  color: #fff;
+  border-color: var(--aw-color-primary, #5b6af8);
+}
+.org-goals-edit-btn:hover,
+.org-goals-cancel-btn:hover,
+.org-goals-close-btn:hover {
+  background: var(--aw-color-bg-hover, #f0f0f0);
+}
+.org-goals-save-btn:hover {
+  opacity: 0.9;
+}
+.org-goals-panel-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+.org-goals-content {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--aw-color-text, #222);
+}
+.org-goals-content.hidden {
+  display: none;
+}
+.org-goals-content h1 { font-size: 18px; margin: 12px 0 6px; }
+.org-goals-content h2 { font-size: 15px; margin: 10px 0 5px; }
+.org-goals-content h3 { font-size: 13px; margin: 8px 0 4px; }
+.org-goals-content ul { padding-left: 18px; margin: 6px 0; }
+.org-goals-content li { margin-bottom: 3px; }
+.org-goals-content p { margin: 6px 0; }
+.org-goals-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.org-goals-table td {
+  border: 1px solid var(--aw-color-border, #e5e5e5);
+  padding: 5px 8px;
+}
+.org-goals-table tr:first-child td {
+  background: var(--aw-color-bg-secondary, #f8fafc);
+  font-weight: 600;
+}
+.org-goals-editor {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  font-family: monospace;
+  font-size: 12px;
+  border: 1px solid var(--aw-color-border, #e5e5e5);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--aw-color-bg, #fff);
+  color: var(--aw-color-text, #222);
+  resize: none;
+  box-sizing: border-box;
+}
+.org-goals-editor.hidden {
+  display: none;
 }
 
 /* ── Org Dashboard Responsive ────────────── */

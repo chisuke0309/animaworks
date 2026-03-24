@@ -44,11 +44,14 @@ export function navigateTo(hash) {
 
 // Cache-bust suffix for ES module dynamic imports.
 // Increment on code changes to force browser re-fetch.
-const _v = "?v=20260227h";
+const _v = "?v=20260321a";
 
 function registerRoutes() {
   routes["/"] = () => import("../pages/home.js" + _v);
   routes["/activity"] = () => import("../pages/activity.js" + _v);
+  routes["/tasks"] = () => import("../pages/tasks.js" + _v);
+  routes["/goals"] = () => import("../pages/goals.js" + _v);
+  routes["/pipeline"] = () => import("../pages/pipeline.js?v=20260322a");
   routes["/chat"] = () => import("../pages/chat.js" + _v);
   routes["/board"] = () => import("../pages/board.js" + _v);
   routes["/setup"] = () => import("../pages/setup.js" + _v);
