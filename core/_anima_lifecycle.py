@@ -27,6 +27,45 @@ logger = logging.getLogger("animaworks.anima")
 class LifecycleMixin:
     """Mixin: heartbeat orchestration, memory consolidation, cron task execution."""
 
+    def _is_heartbeat_idle(self) -> bool:
+        """Return True when there is nothing actionable to process this heartbeat.
+
+        Checks (in order):
+          1. Unread inbox messages
+          2. Recovery note from a previous crash
+          3. Background task notifications pending
+          4. Active (pending/in_progress) tasks in the queue
+
+        If any condition is true the heartbeat should NOT be skipped.
+        """
+        # 1. Unread inbox
+        if self.messenger.has_unread():
+            return False
+
+        # 2. Recovery note
+        if (self.anima_dir / "state" / "recovery_note.md").exists():
+            return False
+
+        # 3. Background task notifications
+        bg_dir = self.anima_dir / "state" / "background_notifications"
+        if bg_dir.exists() and any(bg_dir.glob("*.json")):
+            return False
+
+        # 4. Active tasks in task queue
+        try:
+            from core.memory.task_queue import TaskQueueManager
+            tq = TaskQueueManager(self.anima_dir)
+            active = [
+                t for t in tq.load_all()
+                if t.status in ("pending", "in_progress")
+            ]
+            if active:
+                return False
+        except Exception:
+            pass
+
+        return True
+
     async def run_heartbeat(
         self,
         cascade_suppressed_senders: set[str] | None = None,
@@ -40,6 +79,16 @@ class LifecycleMixin:
 
                 # Activity log: heartbeat start
                 self._activity.log("heartbeat_start", summary=t("anima.heartbeat_start"))
+
+                # ── Idle skip: nothing to do → skip API call ──
+                if self._is_heartbeat_idle():
+                    logger.info("[%s] run_heartbeat SKIPPED (idle)", self.name)
+                    self._activity.log("heartbeat_end", summary="HEARTBEAT_OK")
+                    return CycleResult(
+                        trigger="heartbeat",
+                        action="skipped",
+                        summary="HEARTBEAT_OK",
+                    )
 
                 try:
                     # 1. Build prompt parts

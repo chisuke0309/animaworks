@@ -120,8 +120,13 @@ class ToolHandler(
         self._replied_to: dict[str, set[str]] = {"chat": set(), "background": set()}
         self._posted_channels: dict[str, set[str]] = {"chat": set(), "background": set()}
         self._session_id: str = uuid.uuid4().hex[:12]
+        self._current_pipeline_id: str = ""  # set by inbox when processing a pipeline
         self._activity = ActivityLogger(self._anima_dir)
         self._state_file_lock: threading.Lock | None = None
+        # ── Rule of Two: track net-access and code-execution within a cycle ──
+        # web_fetch (internet) and execute_command (code) must not be used in the
+        # same cycle.  This set is cleared by reset_session_id() at cycle start.
+        self._rule_of_two_used: set[str] = set()
         self._external = ExternalToolDispatcher(
             tool_registry or [],
             personal_tools=personal_tools,
@@ -287,6 +292,7 @@ class ToolHandler(
     def reset_session_id(self) -> None:
         """Generate a new session ID (call at start of each interaction cycle)."""
         self._session_id = uuid.uuid4().hex[:12]
+        self._rule_of_two_used = set()
 
     def reset_replied_to(self, session_type: str | None = None) -> None:
         """Reset replied-to tracking. If session_type given, clear only that session."""
@@ -329,6 +335,15 @@ class ToolHandler(
 
     _MAX_TOOL_OUTPUT_BYTES = 512_000
 
+    # ── Rule of Two: mutually exclusive tool pairs ───────────────────────────
+    # web_fetch (internet access) and execute_command (code execution) must not
+    # be used together in the same cycle to prevent prompt-injection → RCE chains.
+    # If one has been used, the other is blocked until reset_session_id() is called.
+    _RULE_OF_TWO_PAIRS: dict[str, str] = {
+        "web_fetch": "execute_command",
+        "execute_command": "web_fetch",
+    }
+
     def handle(self, name: str, args: dict[str, Any], tool_use_id: str | None = None) -> str:
         """Synchronous tool call dispatch.
 
@@ -340,9 +355,29 @@ class ToolHandler(
         try:
             logger.debug("tool_call name=%s args_keys=%s", name, list(args.keys()))
 
+            # ── Rule of Two guard ──────────────────────────────────────────────
+            conflicting = self._RULE_OF_TWO_PAIRS.get(name)
+            if conflicting and conflicting in self._rule_of_two_used:
+                logger.warning(
+                    "rule_of_two_violation anima=%s blocked=%s because=%s_already_used",
+                    self._anima_name, name, conflicting,
+                )
+                return _error_result(
+                    "RuleOfTwoViolation",
+                    f"Cannot use '{name}' in the same cycle as '{conflicting}' "
+                    "(Security: internet access and code execution are mutually exclusive per cycle).",
+                    suggestion=(
+                        f"Start a new task for actions requiring '{name}'. "
+                        "Do not combine web fetching and command execution in a single cycle."
+                    ),
+                )
+
             handler = self._dispatch.get(name)
             if handler is not None:
                 result = handler(args)
+                # Track usage only on successful dispatch (not external tools)
+                if name in self._RULE_OF_TWO_PAIRS:
+                    self._rule_of_two_used.add(name)
             else:
                 # ── Background execution for eligible external tools ──
                 if self._background_manager and self._background_manager.is_eligible(name):
