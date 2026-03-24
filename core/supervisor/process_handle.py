@@ -151,11 +151,19 @@ class ProcessHandle:
                 open(stderr_path, "a") if stderr_path else None  # noqa: SIM115
             )
 
+            # Inherit current environment and inject embedding server URL so
+            # the worker never loads the model locally (memory optimisation).
+            child_env = os.environ.copy()
+            child_env.setdefault(
+                "ANIMAWORKS_EMBEDDING_SERVER_URL", "http://localhost:18500"
+            )
+
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=self._stderr_file if self._stderr_file else subprocess.DEVNULL,
                 start_new_session=True,
+                env=child_env,
             )
             logger.info("Process started: %s (PID %s)", self.anima_name, self.process.pid)
 

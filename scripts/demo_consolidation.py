@@ -142,7 +142,7 @@ async def main():
 
     try:
         result = await engine.daily_consolidate(
-            model="anthropic/claude-sonnet-4-6",
+            model="anthropic/claude-haiku-4-5-20251001",
             min_episodes=1,
         )
 

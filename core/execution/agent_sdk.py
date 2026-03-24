@@ -134,10 +134,10 @@ class AgentSDKExecutor(BaseExecutor):
 
         m = self._model_config.model
         # Strip provider prefixes:
-        #   anthropic/claude-sonnet-4-6
-        #   bedrock/jp.anthropic.claude-sonnet-4-6
-        #   bedrock/claude-sonnet-4-6
-        #   vertex_ai/claude-sonnet-4-6
+        #   anthropic/claude-haiku-4-5-20251001
+        #   bedrock/jp.anthropic.claude-haiku-4-5-20251001
+        #   bedrock/claude-haiku-4-5-20251001
+        #   vertex_ai/claude-haiku-4-5-20251001
         m = re.sub(
             r"^(anthropic|bedrock|vertex_ai)/"
             r"([a-z]{2}\.anthropic\.)?",

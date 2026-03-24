@@ -192,7 +192,7 @@ class ExecutorFactoryMixin:
                     )
                     if model_name.startswith("codex/"):
                         if uses_anthropic_key:
-                            fallback_model = "anthropic/claude-sonnet-4-6"
+                            fallback_model = "anthropic/claude-haiku-4-5-20251001"
                         else:
                             bare = model_name.split("/", 1)[1]
                             fallback_model = f"openai/{bare}"

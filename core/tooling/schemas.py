@@ -573,8 +573,8 @@ SUPERVISOR_TOOLS: list[dict[str, Any]] = [
             "KNOWN_MODELS 外の名前を指定した場合も警告のみで処理は続行する。\n\n"
             "主なモデル名:\n"
             "  [Mode S / Claude]\n"
-            "  claude-opus-4-6            最高性能・推奨\n"
-            "  claude-sonnet-4-6          バランス型・推奨\n"
+            "  claude-haiku-4-5-20251001            最高性能・推奨\n"
+            "  claude-haiku-4-5-20251001          バランス型・推奨\n"
             "  claude-haiku-4-5-20251001  軽量・高速（レガシー）\n"
             "  [Mode A / OpenAI]\n"
             "  openai/gpt-4.1             最新・コーディング強\n"
@@ -599,7 +599,7 @@ SUPERVISOR_TOOLS: list[dict[str, Any]] = [
                 },
                 "model": {
                     "type": "string",
-                    "description": "新しいモデル名（例: claude-sonnet-4-6, openai/gpt-4.1）",
+                    "description": "新しいモデル名（例: claude-haiku-4-5-20251001, openai/gpt-4.1）",
                 },
                 "reason": {
                     "type": "string",

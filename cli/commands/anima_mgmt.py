@@ -463,7 +463,7 @@ def cmd_anima_set_model(args: argparse.Namespace) -> None:
         if args.all:
             model = args.model or args.anima
             if not model:
-                print("Error: model is required (e.g. animaworks anima set-model claude-sonnet-4-6 --all)")
+                print("Error: model is required (e.g. animaworks anima set-model claude-haiku-4-5-20251001 --all)")
                 sys.exit(1)
             credential = args.credential
             updated = 0
@@ -491,7 +491,7 @@ def cmd_anima_set_model(args: argparse.Namespace) -> None:
             print(f"Updated model for {updated} anima(s) to '{model}'")
         else:
             if not args.anima or not args.model:
-                print("Error: anima name and model are required (e.g. animaworks anima set-model hinata claude-sonnet-4-6)")
+                print("Error: anima name and model are required (e.g. animaworks anima set-model hinata claude-haiku-4-5-20251001)")
                 sys.exit(1)
             anima_dir = animas_dir / args.anima
             if not anima_dir.exists():

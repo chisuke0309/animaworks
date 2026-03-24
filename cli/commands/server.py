@@ -359,20 +359,39 @@ def _start_foreground(args: argparse.Namespace) -> None:
     from core.paths import get_animas_dir, get_shared_dir
     from server.app import create_app
 
+    # When launched by launchd (KeepAlive), a previous instance may have been
+    # SIGKILL'd without cleaning up the PID file.  Instead of refusing to start,
+    # we give the old process a short grace period to die and then forcibly
+    # terminate it so the new instance can take over cleanly.
     existing_pid = _read_pid()
     if existing_pid is not None and _is_process_alive(existing_pid):
-        print(f"Error: Server is already running (pid={existing_pid}).")
-        print("Use 'animaworks stop' first, or 'animaworks restart'.")
-        sys.exit(1)
+        logger.info("Found existing server (pid=%d). Waiting for it to exit...", existing_pid)
+        for _ in range(10):  # wait up to 1 second for zombie reaping
+            time.sleep(0.1)
+            if not _is_process_alive(existing_pid):
+                break
+        if _is_process_alive(existing_pid):
+            # Still alive — send SIGTERM and wait briefly
+            try:
+                os.kill(existing_pid, signal.SIGTERM)
+                for _ in range(30):  # wait up to 3 seconds
+                    time.sleep(0.1)
+                    if not _is_process_alive(existing_pid):
+                        break
+            except ProcessLookupError:
+                pass
+        if _is_process_alive(existing_pid):
+            # Last resort: SIGKILL
+            try:
+                os.kill(existing_pid, signal.SIGKILL)
+                time.sleep(0.2)
+            except ProcessLookupError:
+                pass
+        _remove_pid_file()
+        logger.info("Previous server instance terminated. Starting fresh.")
     elif existing_pid is not None:
         logger.info("Stale PID file found (pid=%d). Cleaning up.", existing_pid)
         _remove_pid_file()
-
-    orphan_pid = _find_server_pid_by_process()
-    if orphan_pid is not None and _is_process_alive(orphan_pid):
-        print(f"Error: Server is already running (pid={orphan_pid}, PID file was missing).")
-        print("Use 'animaworks stop' first, or 'animaworks restart'.")
-        sys.exit(1)
 
     orphan_count = _kill_orphan_runners()
     if orphan_count:

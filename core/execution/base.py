@@ -31,7 +31,7 @@ from core.exceptions import StreamDisconnectedError  # noqa: F401 – re-export
 
 # ── Adaptive Thinking helpers ─────────────────────────────────
 
-_ADAPTIVE_MODELS = frozenset({"claude-opus-4-6", "claude-sonnet-4-6"})
+_ADAPTIVE_MODELS = frozenset({"claude-haiku-4-5-20251001", "claude-haiku-4-5-20251001"})
 
 _PROVIDER_PREFIX_RE = re.compile(
     r"^(?:anthropic|bedrock|vertex_ai)/"
@@ -42,9 +42,9 @@ _PROVIDER_PREFIX_RE = re.compile(
 def _bare_model_name(model: str) -> str:
     """Strip provider and region prefixes to get the canonical model name.
 
-    ``bedrock/jp.anthropic.claude-sonnet-4-6`` → ``claude-sonnet-4-6``
-    ``anthropic/claude-opus-4-6``              → ``claude-opus-4-6``
-    ``claude-sonnet-4-6``                      → ``claude-sonnet-4-6``
+    ``bedrock/jp.anthropic.claude-haiku-4-5-20251001`` → ``claude-haiku-4-5-20251001``
+    ``anthropic/claude-haiku-4-5-20251001``              → ``claude-haiku-4-5-20251001``
+    ``claude-haiku-4-5-20251001``                      → ``claude-haiku-4-5-20251001``
     ``openai/gpt-4o``                          → ``gpt-4o``
     """
     stripped = _PROVIDER_PREFIX_RE.sub("", model)
@@ -64,10 +64,10 @@ def is_anthropic_claude(model: str) -> bool:
 
 
 def resolve_thinking_effort(model: str, effort: str | None) -> str:
-    """Resolve thinking effort, clamping ``"max"`` to ``"high"`` for non-Opus-4.6."""
+    """Resolve thinking effort, clamping ``"max"`` to ``"high"`` for non-Haiku-4.6."""
     resolved = effort or "high"
     if resolved == "max":
-        if _bare_model_name(model) != "claude-opus-4-6":
+        if _bare_model_name(model) != "claude-haiku-4-5-20251001":
             return "high"
     return resolved
 

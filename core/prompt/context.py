@@ -35,14 +35,14 @@ CHARS_PER_TOKEN = 4
 # Keys are matched as prefixes against the model name (after stripping provider/).
 MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     # Anthropic (current generation — conservative default; override via config)
-    "claude-opus-4-6": 128_000,
-    "claude-sonnet-4-6": 128_000,
+    "claude-haiku-4-5-20251001": 128_000,
+    "claude-haiku-4-5-20251001": 128_000,
     # Anthropic (previous generation)
-    "claude-opus-4-5": 200_000,
-    "claude-sonnet-4-5": 200_000,
-    "claude-sonnet-4": 200_000,
-    "claude-sonnet-3.5": 200_000,
-    "claude-opus-4": 200_000,
+    "claude-haiku-4-5-20251001": 200_000,
+    "claude-haiku-4-5-20251001": 200_000,
+    "claude-haiku-4": 200_000,
+    "claude-haiku-3.5": 200_000,
+    "claude-haiku-4": 200_000,
     "claude-haiku-3.5": 200_000,
     "claude-haiku-4": 200_000,
     # OpenAI
