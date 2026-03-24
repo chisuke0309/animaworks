@@ -34,6 +34,7 @@ class CommsToolsMixin:
     # Declared for type-checker visibility
     _messenger: Messenger | None
     _anima_name: str
+    _anima_dir: Any
     _activity: ActivityLogger
     _on_message_sent: OnMessageSentFn | None
     _replied_to: dict[str, set[str]]
@@ -182,14 +183,60 @@ class CommsToolsMixin:
             )
             return result
 
+        # ── Resolve current task_id for message linkage ──
+        current_task_id = ""
+        try:
+            from core.memory.task_queue import TaskQueueManager
+            tqm = TaskQueueManager(self._anima_dir)
+            active = [
+                t for t in tqm.list_tasks()
+                if t.status in ("in_progress", "pending")
+            ]
+            if active:
+                # Prefer in_progress; fall back to most recent pending
+                in_prog = [t for t in active if t.status == "in_progress"]
+                current_task_id = (in_prog or active)[0].task_id
+        except Exception:
+            pass
+
         # ── Internal messaging ──
         internal_to = resolved.name if resolved else to
+
+        # ── Auto-create task when delegating without an active task_id ──
+        # When send_message(intent=delegation) is used instead of delegate_task,
+        # no task_queue entry exists. Create one in the target's queue so the
+        # delegation chain is trackable in the task management UI.
+        if intent == "delegation" and not current_task_id and (resolved is None or resolved.is_internal):
+            try:
+                from core.memory.task_queue import TaskQueueManager
+                from core.paths import get_animas_dir
+                target_dir = get_animas_dir() / internal_to
+                if target_dir.exists():
+                    target_tqm = TaskQueueManager(target_dir)
+                    auto_summary = content.split("\n")[0][:100]
+                    auto_entry = target_tqm.add_task(
+                        source="anima",
+                        original_instruction=content,
+                        assignee=internal_to,
+                        summary=auto_summary,
+                        deadline="24h",
+                        relay_chain=[self._anima_name],
+                    )
+                    current_task_id = auto_entry.task_id
+                    logger.info(
+                        "send_message: auto-created task %s for delegation %s->%s",
+                        current_task_id[:8], self._anima_name, internal_to,
+                    )
+            except Exception:
+                logger.debug("send_message: failed to auto-create delegation task", exc_info=True)
         msg = self._messenger.send(
             to=internal_to,
             content=content,
             thread_id=args.get("thread_id", ""),
             reply_to=args.get("reply_to", ""),
             intent=intent,
+            task_id=current_task_id,
+            pipeline_id=getattr(self, "_current_pipeline_id", ""),
             origin_chain=outgoing_chain,
         )
 

@@ -11,6 +11,7 @@ references are resolved at runtime via MRO when mixed into ``DigitalAnima``.
 
 import json
 import logging
+import uuid
 
 from dataclasses import dataclass, field
 from typing import Any
@@ -83,6 +84,24 @@ class InboxMixin:
                     inbox_result = await self._process_inbox_messages(
                         cascade_suppressed_senders,
                     )
+
+                    # ── pipeline_id の決定と伝播 ──────────────────────────────
+                    # 受信メッセージに pipeline_id があればそれを引き継ぐ。
+                    # なければ（ユーザー起点など）ここで新規発番する。
+                    _inherited_pipeline_id = next(
+                        (
+                            getattr(item.msg, "pipeline_id", "")
+                            for item in (inbox_result.inbox_items if inbox_result else [])
+                            if getattr(item.msg, "pipeline_id", "")
+                        ),
+                        "",
+                    )
+                    _pipeline_id = _inherited_pipeline_id or uuid.uuid4().hex[:16]
+                    # ToolHandler に設定して send_message で使えるようにする
+                    try:
+                        self.agent._tool_handler._current_pipeline_id = _pipeline_id
+                    except Exception:
+                        pass
 
                     if inbox_result.unread_count == 0:
                         logger.info("[%s] process_inbox_message: no messages", self.name)
@@ -170,6 +189,29 @@ class InboxMixin:
                     except Exception:
                         logger.debug(
                             "[%s] inbox: failed to auto-block stale tasks",
+                            self.name, exc_info=True,
+                        )
+
+                    # Mark tasks referenced by incoming messages as in_progress
+                    try:
+                        from core.memory.task_queue import TaskQueueManager as _InboxTQM2
+                        _itq2 = _InboxTQM2(self.anima_dir)
+                        _task_ids = {
+                            item.msg.task_id
+                            for item in inbox_result.inbox_items
+                            if getattr(item.msg, "task_id", "")
+                        }
+                        for _tid in _task_ids:
+                            _task = _itq2.get_task_by_id(_tid)
+                            if _task and _task.status == "pending":
+                                _itq2.update_task(_tid, "in_progress")
+                                logger.info(
+                                    "[%s] inbox: task %s -> in_progress",
+                                    self.name, _tid[:8],
+                                )
+                    except Exception:
+                        logger.debug(
+                            "[%s] inbox: failed to mark tasks in_progress",
                             self.name, exc_info=True,
                         )
 
@@ -458,13 +500,19 @@ class InboxMixin:
         for _m in _recordable[:50]:
             _msg_origin = _SOURCE_TO_ORIGIN.get(_m.source, ORIGIN_UNKNOWN)
             _msg_origin_chain = _m.origin_chain if _m.origin_chain else [_msg_origin]
+            _meta = {"from_type": _m.source}
+            if _m.task_id:
+                _meta["task_id"] = _m.task_id
+            _msg_pipeline_id = getattr(_m, "pipeline_id", "")
+            if _msg_pipeline_id:
+                _meta["pipeline_id"] = _msg_pipeline_id
             self._activity.log(
                 "message_received",
                 content=_m.content,
                 summary=_m.content[:200],
                 from_person=_m.from_person,
                 to_person=self.name,
-                meta={"from_type": _m.source},
+                meta=_meta,  # from_type=_m.source, task_id, pipeline_id
                 origin=_msg_origin,
                 origin_chain=_msg_origin_chain,
             )

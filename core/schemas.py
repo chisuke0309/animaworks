@@ -111,6 +111,8 @@ class Message(BaseModel):
     content: str
     attachments: list[str] = []
     intent: str = ""  # sender-declared intent: "delegation" | "report" | "question" | ""
+    task_id: str = ""  # ID of the task this message belongs to
+    pipeline_id: str = ""  # Root pipeline ID (issued by the initiating anima, propagated downstream)
     timestamp: datetime = Field(default_factory=now_jst)
 
     # External messaging integration
@@ -160,3 +162,5 @@ class TaskEntry(BaseModel):
     relay_chain: list[str] = Field(default_factory=list)  # 委任経路
     updated_at: str  # ISO8601 最終更新日時
     meta: dict[str, Any] = Field(default_factory=dict)  # 追加メタデータ（委譲追跡等）
+    parent_task_id: str | None = None  # 親タスクID（再委任時に設定）
+    root_task_id: str | None = None  # ルートタスクID（パイプライン全体の起点）

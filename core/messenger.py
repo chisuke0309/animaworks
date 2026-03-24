@@ -63,6 +63,8 @@ class Messenger:
         reply_to: str = "",
         skip_logging: bool = False,
         intent: str = "",
+        task_id: str = "",
+        pipeline_id: str = "",
         origin_chain: list[str] | None = None,
     ) -> Message:
         # ── Conversation depth check (internal Anima only) ──
@@ -105,6 +107,8 @@ class Messenger:
             thread_id=thread_id,
             reply_to=reply_to,
             intent=intent,
+            task_id=task_id,
+            pipeline_id=pipeline_id,
             origin_chain=origin_chain or [],
         )
         # New thread: use message id as thread_id
@@ -133,6 +137,10 @@ class Messenger:
                     meta: dict[str, Any] = {"from_type": "anima"}
                     if intent:
                         meta["intent"] = intent
+                    if task_id:
+                        meta["task_id"] = task_id
+                    if pipeline_id:
+                        meta["pipeline_id"] = pipeline_id
                     activity.log("message_sent", content=content, to_person=to, meta=meta)
             except Exception as e:
                 logger.warning(
@@ -481,6 +489,7 @@ class Messenger:
         thread_id: str = "",
         reply_to: str = "",
         intent: str = "",
+        task_id: str = "",
         origin_chain: list[str] | None = None,
     ) -> Message:
         """Async wrapper for filesystem-based send."""
@@ -491,5 +500,6 @@ class Messenger:
             thread_id=thread_id,
             reply_to=reply_to,
             intent=intent,
+            task_id=task_id,
             origin_chain=origin_chain,
         )

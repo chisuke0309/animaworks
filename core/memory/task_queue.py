@@ -133,6 +133,8 @@ class TaskQueueManager:
         summary: str,
         deadline: str,
         relay_chain: list[str] | None = None,
+        parent_task_id: str | None = None,
+        root_task_id: str | None = None,
     ) -> TaskEntry:
         """Add a new task to the queue.
 
@@ -152,8 +154,9 @@ class TaskQueueManager:
             original_instruction = original_instruction[:_MAX_INSTRUCTION_CHARS]
             logger.warning("original_instruction truncated to %d chars", _MAX_INSTRUCTION_CHARS)
         now = now_iso()
+        new_task_id = uuid.uuid4().hex[:12]
         entry = TaskEntry(
-            task_id=uuid.uuid4().hex[:12],
+            task_id=new_task_id,
             ts=now,
             source=source,
             original_instruction=original_instruction,
@@ -163,11 +166,13 @@ class TaskQueueManager:
             deadline=parsed_deadline,
             relay_chain=relay_chain or [],
             updated_at=now,
+            parent_task_id=parent_task_id,
+            root_task_id=root_task_id or new_task_id,
         )
         self._append(entry.model_dump())
         logger.info(
-            "Task added: id=%s source=%s assignee=%s summary=%s",
-            entry.task_id, source, assignee, summary[:50],
+            "Task added: id=%s source=%s assignee=%s summary=%s root=%s",
+            entry.task_id, source, assignee, summary[:50], entry.root_task_id,
         )
         return entry
 
@@ -180,6 +185,8 @@ class TaskQueueManager:
         deadline: str,
         relay_chain: list[str] | None = None,
         meta: dict[str, Any] | None = None,
+        parent_task_id: str | None = None,
+        root_task_id: str | None = None,
     ) -> TaskEntry:
         """Add a task with 'delegated' status for tracking delegation.
 
@@ -192,8 +199,9 @@ class TaskQueueManager:
         if len(original_instruction) > _MAX_INSTRUCTION_CHARS:
             original_instruction = original_instruction[:_MAX_INSTRUCTION_CHARS]
         now = now_iso()
+        new_task_id = uuid.uuid4().hex[:12]
         entry = TaskEntry(
-            task_id=uuid.uuid4().hex[:12],
+            task_id=new_task_id,
             ts=now,
             source="anima",
             original_instruction=original_instruction,
@@ -204,11 +212,13 @@ class TaskQueueManager:
             relay_chain=relay_chain or [],
             updated_at=now,
             meta=meta or {},
+            parent_task_id=parent_task_id,
+            root_task_id=root_task_id or new_task_id,
         )
         self._append(entry.model_dump())
         logger.info(
-            "Delegated task added: id=%s assignee=%s summary=%s",
-            entry.task_id, assignee, summary[:50],
+            "Delegated task added: id=%s assignee=%s summary=%s root=%s",
+            entry.task_id, assignee, summary[:50], entry.root_task_id,
         )
         return entry
 

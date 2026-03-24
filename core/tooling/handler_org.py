@@ -697,6 +697,23 @@ class OrgToolsMixin:
 
         target_dir = get_animas_dir() / target_name
 
+        # ── Resolve current task as parent (for pipeline linking) ──
+        current_parent_task_id: str | None = None
+        current_root_task_id: str | None = None
+        try:
+            own_tqm_pre = TaskQueueManager(self._anima_dir)
+            active = [
+                t for t in own_tqm_pre.list_tasks()
+                if t.status in ("in_progress", "pending")
+            ]
+            if active:
+                in_prog = [t for t in active if t.status == "in_progress"]
+                current = (in_prog or active)[0]
+                current_parent_task_id = current.task_id
+                current_root_task_id = current.root_task_id or current.task_id
+        except Exception:
+            logger.debug("Failed to resolve parent task for delegation", exc_info=True)
+
         sub_tqm = TaskQueueManager(target_dir)
         try:
             sub_entry = sub_tqm.add_task(
@@ -706,6 +723,8 @@ class OrgToolsMixin:
                 summary=summary,
                 deadline=deadline,
                 relay_chain=[self._anima_name],
+                parent_task_id=current_parent_task_id,
+                root_task_id=current_root_task_id,
             )
         except ValueError as e:
             return _error_result("InvalidArguments", str(e))
@@ -737,6 +756,7 @@ class OrgToolsMixin:
                         task_id=sub_entry.task_id,
                     ),
                     intent="delegation",
+                    task_id=sub_entry.task_id,
                     origin_chain=outgoing_chain,
                 )
                 dm_result = t("handler.dm_sent")
@@ -770,16 +790,20 @@ class OrgToolsMixin:
                 "delegated_to": target_name,
                 "delegated_task_id": sub_entry.task_id,
             },
+            parent_task_id=current_parent_task_id,
+            root_task_id=sub_entry.root_task_id,
         )
 
         self._activity.log(
-            "tool_use",
-            tool="delegate_task",
+            "task_delegated",
             summary=t("handler.delegate_log", target_name=target_name, summary=summary[:80]),
+            from_person=self._anima_name,
+            to_person=target_name,
             meta={
                 "target": target_name,
                 "own_task_id": own_entry.task_id,
                 "sub_task_id": sub_entry.task_id,
+                "task_id": sub_entry.task_id,
             },
         )
 
