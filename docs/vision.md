@@ -19,7 +19,7 @@ We design AI as *imperfect individuals* and make them collaborate as an organiza
 
 ### The Genius and the Underdog, Each in Their Place
 
-In AnimaWorks, no single model carries the entire load. Claude Opus and Sonnet handle complex reasoning as engineers or managers. GPT-4o and Gemini handle information gathering and general-purpose tasks. Local models (vLLM, Ollama) quietly handle log monitoring and routine operations, day in and day out.
+In AnimaWorks, no single model carries the entire load. Claude Haiku and Haiku handle complex reasoning as engineers or managers. GPT-4o and Gemini handle information gathering and general-purpose tasks. Local models (vLLM, Ollama) quietly handle log monitoring and routine operations, day in and day out.
 
 The genius has their work. But an organization doesn't run on genius alone. It needs the steady hand who shows up every day and handles the unglamorous tasks without complaint. AnimaWorks treats the capability gap between models not as a deficiency, but as **raw material for organizational design**.
 

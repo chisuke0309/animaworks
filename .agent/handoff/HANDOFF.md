@@ -1,136 +1,104 @@
-# HANDOFF - 2026-03-18 (セッション6)
+# HANDOFF - 2026-03-24 (夜セッション終了)
 
 ## 使用ツール
-Claude Code
-
-## 作業対象プロジェクト
-AnimaWorks（/Users/chisuke/Projects/animaworks）
-
-## 今回セッションで完了した作業
-
-| 対応 | 内容 |
-|------|------|
-| ✅ rue/kuroモデル変更 | `claude-haiku-4-5-20251001` → `gemini/gemini-3.1-flash-lite-preview` |
-| ✅ スルーテスト完走（複数回） | gemini-3.1-flash-lite-preview で全ステップ完走確認 |
-| ✅ **初のCron完全自律実行成功** | 2026-03-17 20:00 cron → rue→kuro→cicchi→Telegram 人間介入ゼロ |
-| ✅ **朝の定時投稿成功** | 2026-03-18 07:16 cron → AIエージェント自律運用トピック投稿 |
-| ✅ セキュリティ実装（コードレベル） | injection.md保護 + supervisorチェック（handler_base/comms/handler） |
-| ✅ システム機能概要書作成 | `docs/SYSTEM_OVERVIEW.md`（16章構成） |
-| ✅ rueのdaily_plan削除 | `procedures/daily_plan.md` と `skills/daily_plan/` を削除 |
-| ✅ 設計思想の整理 | 「プロンプトが判断、コードが実行」「指揮命令系統はコードで強制」確立 |
-| ✅ **episodesバリデーション実装** | `core/memory/manager.py` `append_episode` にOVERDUE/OPR汚染ガード追加 |
-| ✅ X投稿フォーマット修正 | `x_post.md` step2テンプレートにタイトルヘッダー禁止・区切りルール明記 |
-| ✅ cicchi heartbeat.md強化 | 自己検証チェックリスト追加（宣言前に全ツール実行確認） |
-
-## テスト結果
-
-### 夕方テスト（2026-03-17 19:20）
-| 項目 | 内容 |
-|------|------|
-| モデル | gemini/gemini-3.1-flash-lite-preview（rue/kuro） |
-| トピック | AIオーケストレーション（システム・オブ・システムズ） |
-| 全ステップ | ✅ 完走・Telegram通知 |
-| tweet_id | 2033850812699652158 |
-
-### Cron自律実行（2026-03-17 20:00）🎉
-| 項目 | 内容 |
-|------|------|
-| トピック | オンデバイスAI（エッジAI）のメインストリーム化 |
-| 全ステップ | ✅ 完走・Telegram通知 |
-| tweet_id | 2033863427098349625 |
-| 意義 | **初の完全自律実行（人間介入ゼロ）** |
-
-### 朝の定時投稿（2026-03-18 07:16）
-| 項目 | 内容 |
-|------|------|
-| トピック | AIエージェントの自律運用 |
-| 全ステップ | ✅ 完走・Telegram通知 |
-| tweet_id | 2034029745416139045 |
-
-## 現在のAnima構成
-
-| Anima | モデル | credential |
-|-------|--------|------------|
-| cicchi | claude-haiku-4-5-20251001 | anthropic |
-| rue | gemini/gemini-3.1-flash-lite-preview | google |
-| kuro | gemini/gemini-3.1-flash-lite-preview | google |
-| sora | claude-haiku-4-5-20251001 | anthropic |
-
-## セキュリティ実装の詳細（コードレベル・worktree recursing-gagarin）
-
-| ファイル | 変更内容 |
-|---------|---------|
-| `core/tooling/handler_base.py` | `_PROTECTED_FILES` に `injection.md` 追加 → Anima自身による書き換え不可 |
-| `core/tooling/handler.py` | `self._my_supervisor` キャッシュ追加 |
-| `core/tooling/handler_comms.py` | `CommandChainViolation` チェック → supervisor以外の内部Animaへの送信をブロック |
-
-⚠️ worktree `recursing-gagarin` の変更はmainへのマージが未実施
-
-## 現在の状態
-
-### サーバー
-- **状態**: ✅ 起動中（cicchi:3444, kuro:3445, rue:3446, sora:3447, localhost:18500）
-- **起動コマンド**: `cd /Users/chisuke/Projects/animaworks && uv run python main.py serve --foreground >> /tmp/animaworks-fg.log 2>&1 &`
-- **LaunchAgent**: Bad file descriptor問題 → フォアグラウンド起動で運用中（未修正）
-
-### パイプライン
-- `status: idle`（朝07:16投稿完了）
-- 次のcron: 本日20:00
-
-## 既知バグ・残課題
-
-### 🔴 duplicate content エラー（新規）
-**現象**: cicchi が Step 3 完了後も heartbeat で再実行 → Twitter duplicate error が発生
-**推定原因**: `status: idle` への更新とheartbeatの検知タイミングの競合
-**暫定対処**: cicchiへ「投稿済みなので対応不要」と返答
-**根本修正**: heartbeat処理で `status: idle` 確認後は即return する条件を追加すべき
-
-### 🟡 LaunchAgent起動問題（未修正）
-`launchctl` 経由起動 → Bad file descriptor → フォアグラウンド起動で運用中
-
-### 🟡 rueのinboxディレクトリパス問題（未修正）
-rueが `animas/rue/inbox` を参照 → 正しくは `shared/inbox/rue/`
-
-### 🟡 episodes生成バリデーション（✅ 実装済み → mainマージ待ち）
-`append_episode` にOVERDUE/OPRパターン検出ガードを追加済み（worktree recursing-gagarin）
-
-### 🟡 task_queue自動cleanup / activity_logローテーション（未実装）
-
-## 朝の投稿 duplicate contentエラーの詳細
-
-**現象**: 07:16に投稿成功 → その後heartbeatが再度 `kuro_done` を検知して2回目を試みる → Twitter duplicate error
-**本質**: Step3完了後 `status: idle` にしているが、heartbeat周期内で再トリガーされている
-**暫定対処**: cicchiのheartbeat.mdに「宣言前チェックリスト」追加（自己検証強化）
-**根本修正候補**: heartbeatで `status: idle` かつ `updated_at` が直近N分以内なら即return
+Claude Code (claude-sonnet-4-6) / worktree: charming-knuth
 
 ---
 
-## 収益化ロードマップ（議論中）
+## 現在の状態
 
-### 方向性A: 業務自動化プロ
-副業先の業務分析プロジェクトを活用。「AIエージェントで業務効率化」を提案・実装できる立場を確立。AnimaWorksのパイプライン汎用設計をそのまま使える。
+### AnimaWorks稼働状況
+- 全anima（cicchi/rue/kuro/sora）稼働中
+- ミッション: ペット・グルーミング＋エコ・サステナブル生活術
+- 旧コンテンツ（AI/RPA時代）は完全クリーンアップ済み
 
-### 方向性B: Felix型自律ビジネス
-AnimaWorksをFelixモデルに近づける。
+---
 
-| 機能 | 状態 |
+## 完了済み（このセッション）
+
+- [x] **Workspace「組織」ボタン → 組織目標パネル実装**
+  - `org-dashboard.js`: 「組織」タイトルを `🎯` ボタンに変更
+  - クリックで goals panel をオーバーレイ表示（position: absolute; inset: 0）
+  - `/api/common-knowledge/organization/goals.md` を読み書き
+  - マークダウン表示・編集・保存機能つき
+  - CSS追加: `.org-goals-btn`, `.org-goals-panel`, `.org-goals-table` 等
+  - `.org-dashboard` に `position: relative` 追加（overlay基準）
+
+- [x] **main sidebar から「🎯 組織目標」メニュー削除**
+  - `index.html` から該当 `<li>` を削除（Workspaceから参照可能なため）
+
+- [x] **common_knowledge/00_index.md に goals.md を登録**
+  - `organization/` セクション先頭（最重要）に追記
+  - 「意思決定・優先順位付けの基準として常に参照すること」と明記
+  - キーワード索引に「目標, KPI, 収益, マイルストーン, 月次, 数値目標」追加
+
+---
+
+## 未完了（次セッション以降）
+
+### 高優先度
+- [ ] **permissions.mdホワイトリスト化**（トークン削減）
+  - 現状 `all: yes` で毎heartbeat ~20,000 chars のツールスキーマが注入されている
+  - 各animaに必要なツールのみに絞る（`/reorganize-team` Step 2-3 参照）
+
+- [ ] **Telegram承認フローの動作確認**
+  - x_post_approval.pyのsys.path修正済み → 次回投稿で `No module named 'core'` が解消されるか確認
+  - injection.mdに「OK/ok/はい/承認 → x_post_execute_pending」の明示ルールを追加すること（要確認）
+
+### 中優先度
+- [ ] **パイプライン詳細パネルのコンテンツ表示**（JS実装）
+  - CSS修正済み。明細クリック→メッセージ本文をパネルに表示するJS実装が残り
+
+### 低優先度
+- [ ] **Xプロフィール変更**: ユーザーが手動でTrinityDoxのアカウント名・bio変更（未実施）
+- [ ] **consolidation/distillationモデル切り替え**: Qwen3.5-4B（LM Studio）検討中
+
+---
+
+## 重要な技術メモ
+
+### 組織目標ファイルの流通経路
+- **ファイル**: `~/.animaworks/common_knowledge/organization/goals.md`
+- **UI**: Workspace → 「組織 🎯」ボタン → goals panel で表示・編集
+- **API**: `GET/PUT /api/common-knowledge/organization/goals.md`
+- **Animaからのアクセス**: `read_memory_file(path="common_knowledge/organization/goals.md")`
+- **RAG検索**: `search_memory(query="目標 KPI 収益", scope="common_knowledge")` でヒット
+- **00_index.md**: 登録済み → 迷ったときにも自動参照される
+
+### x_post_approval.py スロット仕様
+```python
+# 朝8時枠
+x_post_request_approval(text="...", slot="morning")
+x_post_execute_pending(slot="morning")
+
+# 夕17時枠
+x_post_request_approval(text="...", slot="evening")
+x_post_execute_pending(slot="evening")
+```
+ファイル: `~/.animaworks/animas/cicchi/state/pending_x_post_{slot}.json`
+
+### 旧コンテンツ汚染の根本原因（教訓）
+- `shortterm/chat/archive/` — **最も見落としやすい**。大量のセッションアーカイブが蓄積し、heartbeatコンテキストに混入する
+- `state/` 直下のmdファイル（x_post_restore_report.md等）— 名前が汎用的でも中身が旧コンテンツの場合あり
+- `knowledge/revenue_strategy.md` 等 — ミッション変更後も残りやすい
+
+### cicchi cronスケジュール
+| 時刻 | 内容 |
 |------|------|
-| 夜間自己改善ループ（23:30） | ✅ 稼働中 |
-| X自動投稿 | ✅ 稼働中 |
-| Telegram入力受信（chisuke→cicchi） | ❌ 未着手 |
-| Stripe連携 | ❌ 未着手 |
-| 製品生成・販売 | ❌ 未着手 |
+| 08:00 | 朝の固定投稿（morning枠実行） |
+| 09:00 | 日次オーケストレーション（evening枠コンテンツ制作） |
+| 17:00 | 夕方の固定投稿（evening枠実行） |
+| 21:00 | 日次レビュー＆翌朝準備（翌日morning枠コンテンツ制作） |
 
-現時点の優先度: **方向性A**（副業先での実績作り → 横展開）
+### anima構成（現在）
+| anima | モデル | ロール |
+|-------|--------|--------|
+| cicchi | claude-sonnet-4-6 | オーケストレーター |
+| rue | claude-haiku-4-5-20251001 | ニッチ調査 |
+| kuro | claude-haiku-4-5-20251001 | コンテンツ制作 |
+| sora | claude-haiku-4-5 | ビジュアル生成 |
 
-## 競合調査メモ
-
-- **Paperclip** (https://paperclip.ing/): マルチエージェント組織OSS（MIT）。予算管理・ガバナンス機能あり。記憶システム・自己改善はなし。AnimaWorksの差別化軸: 8層記憶 + 夜間自己改善 + Animaの人格。
-- **税理士事例**: Claude Codeで60社を1人で運用。「業務知識×自動化」モデルの好例。
-- **Felix/Nate**: 自律AIエージェントで$300K+/月。AnimaWorksは構造的に近い（夜間自己改善実装済み）。
-
-## 注意事項
-- **ハンドオフにAPIキー等の機密情報を書かない**（値は `.env` 参照）
-- gemini-3.1-flash-lite-preview は多段ツール呼び出しが安定動作確認済み
-- cicchiのheartbeat.mdは夜間自己改善ループで自律的に更新されている（毎晩23:30）
-- rueのdaily_planは削除済み（2026-03-18）。他メンバーにも同様のファイルが自律生成されていないか定期確認推奨
+### 読むべきドキュメント（理解の手引き）
+- **起動・記憶の仕組みを理解したい**: `docs/brain-mapping.ja.md`（247行、推奨）
+- **詳細なメモリシステム**: `docs/memory.ja.md`（792行）
+- **システム全体の機能**: `docs/SYSTEM_OVERVIEW.md`（634行）

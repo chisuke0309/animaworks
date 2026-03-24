@@ -218,12 +218,12 @@ Role templates provide specialized prompts, permissions, and model defaults:
 
 | Role | Default Model | Description |
 |------|--------------|-------------|
-| `engineer` | Opus | Complex reasoning, code generation |
-| `manager` | Opus | Coordination, decision-making |
-| `writer` | Sonnet | Content creation |
+| `engineer` | Haiku | Complex reasoning, code generation |
+| `manager` | Haiku | Coordination, decision-making |
+| `writer` | Haiku | Content creation |
 | `researcher` | Haiku | Information gathering |
 | `ops` | Local model | Log monitoring, routine tasks |
-| `general` | Sonnet | General-purpose |
+| `general` | Haiku | General-purpose |
 
 All communication flows through async messaging. Each Anima runs as an isolated subprocess managed by ProcessSupervisor, communicating via Unix Domain Sockets.
 

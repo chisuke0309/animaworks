@@ -178,7 +178,7 @@ animaworks/
 
 |フィールド                           |型              |デフォルト                   |説明                        |
 |---------------------------------|---------------|------------------------|--------------------------|
-|`model`                          |`str`          |`claude-sonnet-4-6`       |使用するモデル名（bare name、プロバイダprefixなし）|
+|`model`                          |`str`          |`claude-haiku-4-5-20251001`       |使用するモデル名（bare name、プロバイダprefixなし）|
 |`fallback_model`                 |`str \| null`  |`null`                  |フォールバックモデル                  |
 |`max_tokens`                     |`int`          |`4096`                  |1回のレスポンスの最大トークン数             |
 |`max_turns`                      |`int`          |`20`                    |1サイクルの最大ターン数                |
@@ -201,7 +201,7 @@ animaworks/
     "ollama": { "api_key": "dummy", "base_url": "http://localhost:11434/v1" }
   },
   "anima_defaults": {
-    "model": "claude-sonnet-4-6",
+    "model": "claude-haiku-4-5-20251001",
     "max_tokens": 4096,
     "max_turns": 20,
     "credential": "anthropic",
@@ -223,7 +223,7 @@ animaworks/
 2. `MODEL_CONTEXT_WINDOWS` ハードコード辞書（フォールバック — プレフィックスマッチ）
 3. `_DEFAULT_CONTEXT_WINDOW` = 128,000（最終フォールバック）
 
-ハードコードのデフォルト値はコスト安全側に設定（例: `claude-sonnet-4-6: 128,000`）。より大きいウィンドウが必要な場合は config.json でオーバーライドする。コンパクション閾値は自動スケール: 200K 以上のウィンドウでは設定値（デフォルト 0.50）をそのまま使用、200K 未満は 0.98 に向けて線形スケール。
+ハードコードのデフォルト値はコスト安全側に設定（例: `claude-haiku-4-5-20251001: 128,000`）。より大きいウィンドウが必要な場合は config.json でオーバーライドする。コンパクション閾値は自動スケール: 200K 以上のウィンドウでは設定値（デフォルト 0.50）をそのまま使用、200K 未満は 0.98 に向けて線形スケール。
 
 ### 3.3 モデル・認証設定（credentials）
 
@@ -276,8 +276,8 @@ animaworks/
 
 | プロバイダ | 形式 | 例 |
 |-----------|------|-----|
-| Anthropic直接 | `claude-{tier}-{version}` | `claude-opus-4-6`, `claude-sonnet-4-6` |
-| AWS Bedrock | `bedrock/{region}.anthropic.claude-{tier}-{version}` | `bedrock/jp.anthropic.claude-sonnet-4-6` |
+| Anthropic直接 | `claude-{tier}-{version}` | `claude-haiku-4-5-20251001`, `claude-haiku-4-5-20251001` |
+| AWS Bedrock | `bedrock/{region}.anthropic.claude-{tier}-{version}` | `bedrock/jp.anthropic.claude-haiku-4-5-20251001` |
 | Azure OpenAI | `azure/{deployment-name}` | `azure/gpt-4.1-mini` |
 | Google Vertex AI | `vertex_ai/{model-name}` | `vertex_ai/gemini-2.5-flash` |
 | OpenAI直接 | `openai/{model-name}` | `openai/gpt-4.1` |
@@ -310,15 +310,15 @@ animaworks/
 
 #### 構成パターン例
 
-**Claude Opus（Anthropic Max Plan）:**
+**Claude Haiku（Anthropic Max Plan）:**
 ```json
-{ "model": "claude-opus-4-6", "credential": "anthropic" }
+{ "model": "claude-haiku-4-5-20251001", "credential": "anthropic" }
 ```
 
-**Claude Sonnet（AWS Bedrock経由 + Mode S）:**
+**Claude Haiku（AWS Bedrock経由 + Mode S）:**
 ```json
 {
-  "model": "bedrock/jp.anthropic.claude-sonnet-4-6",
+  "model": "bedrock/jp.anthropic.claude-haiku-4-5-20251001",
   "credential": "bedrock",
   "execution_mode": "S",
   "mode_s_auth": "bedrock"

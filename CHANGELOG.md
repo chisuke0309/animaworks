@@ -276,9 +276,9 @@ adhering to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Update all default models to current generation: Opus 4 → Opus 4.6 ($5/$25, 67% cheaper), Sonnet 4 → Sonnet 4.6 (same price, 1M context), Haiku 4.5 → GPT-4.1-mini / Gemini 2.5 Flash
-- Role templates updated: engineer/manager use claude-opus-4-6, writer/general/researcher use claude-sonnet-4-6
-- Context window map: add 1M entries for Opus 4.6, Sonnet 4.6, GPT-4.1 family
+- Update all default models to current generation: Haiku 4 → Haiku 4.6 ($5/$25, 67% cheaper), Haiku 4 → Haiku 4.6 (same price, 1M context), Haiku 4.5 → GPT-4.1-mini / Gemini 2.5 Flash
+- Role templates updated: engineer/manager use claude-haiku-4-5-20251001, writer/general/researcher use claude-haiku-4-5-20251001
+- Context window map: add 1M entries for Haiku 4.6, Haiku 4.6, GPT-4.1 family
 - Setup wizard: update provider model lists to current generation
 - Centralize default model name into `DEFAULT_ANIMA_MODEL` constant — future model updates only need 1 line change + role templates
 

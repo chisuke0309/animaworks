@@ -180,7 +180,7 @@ All settings are consolidated in `~/.animaworks/config.json`. Validated with the
 
 |Field                                |Type            |Default                     |Description                      |
 |-------------------------------------|----------------|----------------------------|---------------------------------|
-|`model`                              |`str`           |`claude-sonnet-4-6`         |Model name to use (bare name, no provider prefix)|
+|`model`                              |`str`           |`claude-haiku-4-5-20251001`         |Model name to use (bare name, no provider prefix)|
 |`fallback_model`                     |`str \| null`   |`null`                      |Fallback model                   |
 |`max_tokens`                         |`int`           |`4096`                      |Maximum tokens per response      |
 |`max_turns`                          |`int`           |`20`                        |Maximum turns per cycle          |
@@ -203,10 +203,10 @@ All settings are consolidated in `~/.animaworks/config.json`. Validated with the
     "ollama": { "api_key": "dummy", "base_url": "http://localhost:11434/v1" }
   },
   "model_context_windows": {
-    "claude-sonnet-4-6": 200000
+    "claude-haiku-4-5-20251001": 200000
   },
   "anima_defaults": {
-    "model": "claude-sonnet-4-6",
+    "model": "claude-haiku-4-5-20251001",
     "max_tokens": 4096,
     "max_turns": 20,
     "credential": "anthropic",
@@ -228,7 +228,7 @@ All settings are consolidated in `~/.animaworks/config.json`. Validated with the
 2. `MODEL_CONTEXT_WINDOWS` hardcoded dict (fallback — prefix match)
 3. `_DEFAULT_CONTEXT_WINDOW` = 128,000 (final fallback)
 
-Hardcoded defaults use conservative values (e.g. `claude-sonnet-4-6: 128,000`). Override via config when a larger window is needed. The compaction threshold is auto-scaled: models with >= 200K windows use the configured value (default 0.50); smaller models scale linearly toward 0.98.
+Hardcoded defaults use conservative values (e.g. `claude-haiku-4-5-20251001: 128,000`). Override via config when a larger window is needed. The compaction threshold is auto-scaled: models with >= 200K windows use the configured value (default 0.50); smaller models scale linearly toward 0.98.
 
 **RAGConfig Fields:**
 
