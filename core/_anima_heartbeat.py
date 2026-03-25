@@ -361,9 +361,11 @@ class HeartbeatMixin:
         from core.tooling.handler_base import active_session_type as _active_session_type
         _hb_session_token = self.agent._tool_handler.set_active_session_type("heartbeat")
 
-        # pipeline_id: ハートビート起点の委任もトラッキングできるよう新規発番
+        # pipeline_id: lifecycle側で設定済みの場合はそのまま使う。
+        # 未設定の場合のみ新規発番する（後方互換）。
         import uuid as _uuid
-        self.agent._tool_handler._current_pipeline_id = _uuid.uuid4().hex[:16]
+        if not getattr(self.agent._tool_handler, "_current_pipeline_id", ""):
+            self.agent._tool_handler._current_pipeline_id = _uuid.uuid4().hex[:16]
 
         try:
             async for chunk in self.agent.run_cycle_streaming(

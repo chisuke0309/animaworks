@@ -233,9 +233,46 @@ def _build_mcp_tools() -> tuple[list[Tool], frozenset[str]]:
             except Exception:
                 logger.debug("External tool schema loading failed", exc_info=True)
 
-    # Build the dynamic exposed set: internal + external tool names
+    # Load personal tool schemas (anima-specific tools like x_post_approval)
+    personal_schemas: list[dict[str, Any]] = []
+    if anima_dir_env:
+        anima_dir = Path(anima_dir_env).resolve()
+        if anima_dir.is_dir():
+            try:
+                import importlib.util
+                from core.tools import discover_common_tools, discover_personal_tools
+
+                common = discover_common_tools()
+                personal = discover_personal_tools(anima_dir)
+                all_personal = {**common, **personal}
+                for tool_name, file_path in all_personal.items():
+                    try:
+                        spec = importlib.util.spec_from_file_location(
+                            f"animaworks_tool_{tool_name}", file_path
+                        )
+                        if spec is None or spec.loader is None:
+                            continue
+                        mod = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+                        if hasattr(mod, "get_tool_schemas"):
+                            schemas = mod.get_tool_schemas()
+                            personal_schemas.extend(schemas)
+                    except Exception as e:
+                        logger.debug("Personal tool %s schema load failed: %s", tool_name, e)
+                if personal_schemas:
+                    all_schemas.extend(personal_schemas)
+                    logger.info(
+                        "Loaded %d personal tool schemas: %s",
+                        len(personal_schemas),
+                        ", ".join(s["name"] for s in personal_schemas),
+                    )
+            except Exception:
+                logger.debug("Personal tool schema loading failed", exc_info=True)
+
+    # Build the dynamic exposed set: internal + external + personal tool names
     external_names = frozenset(s["name"] for s in external_schemas)
-    exposed = _EXPOSED_TOOL_NAMES | external_names
+    personal_names = frozenset(s["name"] for s in personal_schemas)
+    exposed = _EXPOSED_TOOL_NAMES | external_names | personal_names
 
     # Apply DB description overrides
     from core.tooling.schemas import apply_db_descriptions

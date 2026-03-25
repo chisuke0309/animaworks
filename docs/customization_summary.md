@@ -1,8 +1,8 @@
 # AnimaWorks カスタマイズまとめ（本家フォーク差分）
 
 > **ベースライン**: `87aebdd0` — Release 2026-03-01
-> **現在の HEAD**: `8cd896ba` + 未コミット変更群 (2026-03-24 時点)
-> **差分**: 14コミット / 59ファイル / +2,332行（コミット済み）＋ 未コミット変更あり（後述）
+> **現在の HEAD**: `b40204de` + 未コミット変更群 (2026-03-25 時点)
+> **差分**: 15コミット / 60+ファイル / +2,500行超（コミット済み）＋ 未コミット変更あり（後述）
 
 ---
 
@@ -87,9 +87,32 @@
 
 ---
 
-## ⚠️ 未コミット変更（2026-03-24 時点）
+## 14. 🎯 Workspace 組織目標パネル
 
-以下は `git diff HEAD` で確認した作業中の変更。次回コミット時に反映予定。
+**コミット** `b40204de`
+
+| 変更内容 | なぜ変更したか |
+|---------|--------------|
+| `org-dashboard.js`: 「組織」タイトルを `🎯` ボタンに変更し、クリックでgoals panelをオーバーレイ表示 | Workspace から直接組織目標を確認・編集できるようにするため。サイドバーに専用メニューを置くより、Workspaceのcontextで見るほうが自然 |
+| `/api/common-knowledge/organization/goals.md` の GET/PUT でマークダウン表示・編集・保存 | animaが`read_memory_file`で参照するファイルをUIから直接編集できるようにするため |
+| `.org-dashboard` に `position: relative` 追加、overlay用CSS（`.org-goals-btn`・`.org-goals-panel`・`.org-goals-table`）追加 | goals panelをWorkspace内にオーバーレイ表示するための基準点とスタイルを整えるため |
+
+---
+
+## 15. 🧹 ナビゲーション整理
+
+**コミット** `b40204de`
+
+| 変更内容 | なぜ変更したか |
+|---------|--------------|
+| サイドバーから「🎯 組織目標」「ボード」「ダッシュボード」「プロセス監視」「サーバー通信」「タスク管理」を削除 | 組織目標はWorkspaceから参照可能になったため不要。その他は使用頻度が低く画面を圧迫していたため |
+| サイドバーに「Pipeline」を追加 | パイプライン監視を主要ナビに昇格させるため |
+
+---
+
+## ⚠️ 未コミット変更（2026-03-25 時点）
+
+以下は作業中の変更。次回コミット時に反映予定。
 
 ---
 
@@ -171,3 +194,46 @@
 | 変更内容 | なぜ変更したか |
 |---------|--------------|
 | `procedural_distill()` / `weekly_pattern_distill()` に `api_base` / `api_key` パラメータを追加 | `ConsolidationConfig.llm_api_base` / `llm_api_key` を読み込み、LM Studio などカスタムエンドポイントで distillation を実行できるようにするため |
+
+---
+
+## 16. 🔗 pipeline_id をライフサイクル起点から一貫して発番
+
+**変更ファイル**: `core/_anima_lifecycle.py`, `core/_anima_heartbeat.py`
+
+| 変更内容 | なぜ変更したか |
+|---------|--------------|
+| `run_heartbeat()` の冒頭で `pipeline_id` を UUID 発番し、`heartbeat_start` ログの `meta` に含める | `heartbeat_start` と後続の `message_sent`・`cron_executed` が同じ `pipeline_id` を持つことで、パイプラインUIが1グループとして表示できるようにするため |
+| `run_cron_task()` の冒頭でも `pipeline_id` を発番し、`cron_executed` ログの `meta` に含める | cronトリガーのセッション（09:00オーケストレーション等）を1グループとして追跡するため |
+| `_anima_heartbeat.py`: lifecycle側で既に設定済みの場合は新規発番をスキップ | 二重発番を防ぐ後方互換処理 |
+
+---
+
+## 17. ⏰ X投稿の時間帯ウィンドウ強制
+
+**変更ファイル**: `~/.animaworks/animas/cicchi/tools/x_post_approval.py`
+
+| 変更内容 | なぜ変更したか |
+|---------|--------------|
+| `_execute_pending()` に投稿時間帯チェックを追加（morning: 07:45〜08:30、evening: 16:45〜17:30） | cicchi が「OK」メッセージを深夜の heartbeat で受信し即座に投稿実行することで、朝3時に投稿されてしまう問題を防ぐため |
+| 時間帯外の場合、「cronが自動実行する」旨のエラーを返す | 次のウィンドウで自動実行されることを明示し、再試行による二重投稿を防ぐため |
+
+---
+
+## 18. 🛡 X投稿の空テキストガード
+
+**変更ファイル**: `~/.animaworks/animas/cicchi/tools/x_post_approval.py`
+
+| 変更内容 | なぜ変更したか |
+|---------|--------------|
+| `_request_approval()` の冒頭で `text` が空の場合は即座にエラーを返す | `text` パラメータなしで `x_post_request_approval` が呼ばれたとき、Telegramに内容のない承認リクエストが送信されていたため |
+
+---
+
+## 19. 📅 kuro の X投稿スロット認識修正
+
+**変更ファイル**: `~/.animaworks/animas/kuro/injection.md`
+
+| 変更内容 | なぜ変更したか |
+|---------|--------------|
+| injection.md に「X投稿スケジュール」セクションを追加（08:00 morning枠・17:00 evening枠のみ） | kuroが制作報告に「朝07:30枠」「昼13:00枠」等、存在しない時間帯を記載していたため。現在の2枠スケジュールを明示して誤参照を防ぐ |

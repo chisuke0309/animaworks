@@ -77,8 +77,21 @@ class LifecycleMixin:
                 self._status_slots["background"] = "checking"
                 self._last_heartbeat = now_jst()
 
-                # Activity log: heartbeat start
-                self._activity.log("heartbeat_start", summary=t("anima.heartbeat_start"))
+                # Generate pipeline_id before logging so heartbeat_start and
+                # subsequent send_message events share the same pipeline.
+                import uuid as _uuid
+                _hb_pipeline_id = _uuid.uuid4().hex[:16]
+                try:
+                    self.agent._tool_handler._current_pipeline_id = _hb_pipeline_id
+                except Exception:
+                    _hb_pipeline_id = ""
+
+                # Activity log: heartbeat start (include pipeline_id for UI grouping)
+                self._activity.log(
+                    "heartbeat_start",
+                    summary=t("anima.heartbeat_start"),
+                    meta={"pipeline_id": _hb_pipeline_id} if _hb_pipeline_id else None,
+                )
 
                 # ── Idle skip: nothing to do → skip API call ──
                 if self._is_heartbeat_idle():
@@ -303,6 +316,14 @@ class LifecycleMixin:
                 _session_token = self.agent._tool_handler.set_active_session_type("background")
                 self.agent._tool_handler.set_session_origin(ORIGIN_SYSTEM)
 
+                # pipeline_id: cron起点の委任をパイプラインUIで一括追跡するため発番
+                import uuid as _uuid
+                _cron_pipeline_id = _uuid.uuid4().hex[:16]
+                try:
+                    self.agent._tool_handler._current_pipeline_id = _cron_pipeline_id
+                except Exception:
+                    _cron_pipeline_id = ""
+
                 prompt = self._build_cron_prompt(
                     task_name, description, command_output=command_output,
                 )
@@ -320,15 +341,18 @@ class LifecycleMixin:
                         duration_ms=result.duration_ms,
                     )
 
-                    # Activity log: cron executed
+                    # Activity log: cron executed (include pipeline_id for UI grouping)
+                    _cron_meta: dict = {
+                        "task_name": task_name,
+                        "duration_ms": result.duration_ms if result else 0,
+                    }
+                    if _cron_pipeline_id:
+                        _cron_meta["pipeline_id"] = _cron_pipeline_id
                     self._activity.log(
                         "cron_executed",
                         summary=t("anima.cron_task_summary", task=task_name),
                         content=result.summary[:500] if result else "",
-                        meta={
-                            "task_name": task_name,
-                            "duration_ms": result.duration_ms if result else 0,
-                        },
+                        meta=_cron_meta,
                     )
 
                     logger.info(
