@@ -366,6 +366,13 @@ class HeartbeatMixin:
         import uuid as _uuid
         if not getattr(self.agent._tool_handler, "_current_pipeline_id", ""):
             self.agent._tool_handler._current_pipeline_id = _uuid.uuid4().hex[:16]
+            # fallback 発番時も ActivityLogger に反映
+            try:
+                self.agent._tool_handler._activity.current_pipeline_id = (
+                    self.agent._tool_handler._current_pipeline_id
+                )
+            except Exception:
+                pass
 
         try:
             async for chunk in self.agent.run_cycle_streaming(

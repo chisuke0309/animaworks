@@ -78,6 +78,9 @@ class ActivityLogger(
     def __init__(self, anima_dir: Path) -> None:
         self.anima_dir = anima_dir
         self._log_dir = anima_dir / "activity_log"
+        # pipeline_id: セッション中の全イベントに自動注入するID。
+        # lifecycle / heartbeat から設定される。
+        self.current_pipeline_id: str = ""
 
     # ── Recording ─────────────────────────────────────────────
 
@@ -115,6 +118,11 @@ class ActivityLogger(
         Returns:
             The recorded :class:`ActivityEntry`.
         """
+        # pipeline_id 自動注入: meta に未設定かつ current_pipeline_id があれば追加
+        _meta = meta or {}
+        if self.current_pipeline_id and "pipeline_id" not in _meta:
+            _meta = {**_meta, "pipeline_id": self.current_pipeline_id}
+
         entry = ActivityEntry(
             ts=now_iso(),
             type=event_type,
@@ -125,7 +133,7 @@ class ActivityLogger(
             channel=channel,
             tool=tool,
             via=via,
-            meta=meta or {},
+            meta=_meta,
             origin=origin,
             origin_chain=origin_chain or [],
         )

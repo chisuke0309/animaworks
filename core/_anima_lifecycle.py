@@ -86,11 +86,18 @@ class LifecycleMixin:
                 except Exception:
                     _hb_pipeline_id = ""
 
-                # Activity log: heartbeat start (include pipeline_id for UI grouping)
+                # ActivityLogger にも pipeline_id を設定（全イベント自動注入）
+                if _hb_pipeline_id:
+                    self._activity.current_pipeline_id = _hb_pipeline_id
+                    try:
+                        self.agent._tool_handler._activity.current_pipeline_id = _hb_pipeline_id
+                    except Exception:
+                        pass
+
+                # Activity log: heartbeat start (pipeline_id は自動注入される)
                 self._activity.log(
                     "heartbeat_start",
                     summary=t("anima.heartbeat_start"),
-                    meta={"pipeline_id": _hb_pipeline_id} if _hb_pipeline_id else None,
                 )
 
                 # ── Idle skip: nothing to do → skip API call ──
@@ -137,6 +144,13 @@ class LifecycleMixin:
                 finally:
                     self._status_slots["background"] = "idle"
                     self._task_slots["background"] = ""
+                    # pipeline_id をクリア（次セッションに漏れないように）
+                    self._activity.current_pipeline_id = ""
+                    try:
+                        self.agent._tool_handler._current_pipeline_id = ""
+                        self.agent._tool_handler._activity.current_pipeline_id = ""
+                    except Exception:
+                        pass
         finally:
             self._notify_lock_released()
             # Signal pending task execution after heartbeat completes
@@ -324,6 +338,14 @@ class LifecycleMixin:
                 except Exception:
                     _cron_pipeline_id = ""
 
+                # ActivityLogger にも pipeline_id を設定（全イベント自動注入）
+                if _cron_pipeline_id:
+                    self._activity.current_pipeline_id = _cron_pipeline_id
+                    try:
+                        self.agent._tool_handler._activity.current_pipeline_id = _cron_pipeline_id
+                    except Exception:
+                        pass
+
                 prompt = self._build_cron_prompt(
                     task_name, description, command_output=command_output,
                 )
@@ -376,6 +398,13 @@ class LifecycleMixin:
                     self._cron_idle.set()
                     self._status_slots["background"] = "idle"
                     self._task_slots["background"] = ""
+                    # pipeline_id をクリア
+                    self._activity.current_pipeline_id = ""
+                    try:
+                        self.agent._tool_handler._current_pipeline_id = ""
+                        self.agent._tool_handler._activity.current_pipeline_id = ""
+                    except Exception:
+                        pass
         finally:
             self._notify_lock_released()
 
