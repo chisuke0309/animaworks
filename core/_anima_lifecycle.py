@@ -61,7 +61,7 @@ class LifecycleMixin:
             ]
             if active:
                 return False
-        except Exception:
+        except (OSError, KeyError):
             pass
 
         return True
@@ -81,6 +81,7 @@ class LifecycleMixin:
                 # subsequent send_message events share the same pipeline.
                 import uuid as _uuid
                 _hb_pipeline_id = _uuid.uuid4().hex[:16]
+                self._last_pipeline_id = _hb_pipeline_id
                 try:
                     self.agent._tool_handler._current_pipeline_id = _hb_pipeline_id
                 except Exception:
@@ -91,7 +92,7 @@ class LifecycleMixin:
                     self._activity.current_pipeline_id = _hb_pipeline_id
                     try:
                         self.agent._tool_handler._activity.current_pipeline_id = _hb_pipeline_id
-                    except Exception:
+                    except AttributeError:
                         pass
 
                 # Activity log: heartbeat start (pipeline_id は自動注入される)
@@ -149,7 +150,7 @@ class LifecycleMixin:
                     try:
                         self.agent._tool_handler._current_pipeline_id = ""
                         self.agent._tool_handler._activity.current_pipeline_id = ""
-                    except Exception:
+                    except AttributeError:
                         pass
         finally:
             self._notify_lock_released()
@@ -311,6 +312,7 @@ class LifecycleMixin:
         task_name: str,
         description: str,
         command_output: str | None = None,
+        pipeline_id: str = "",
     ) -> CycleResult:
         """Execute a cron LLM task with heartbeat-equivalent context.
 
@@ -331,8 +333,11 @@ class LifecycleMixin:
                 self.agent._tool_handler.set_session_origin(ORIGIN_SYSTEM)
 
                 # pipeline_id: cron起点の委任をパイプラインUIで一括追跡するため発番
+                # 呼び出し元から pipeline_id が渡された場合はそれを再利用し、
+                # heartbeat と cron を同一パイプラインとしてUIに表示する。
                 import uuid as _uuid
-                _cron_pipeline_id = _uuid.uuid4().hex[:16]
+                _cron_pipeline_id = pipeline_id or _uuid.uuid4().hex[:16]
+                self._last_pipeline_id = _cron_pipeline_id
                 try:
                     self.agent._tool_handler._current_pipeline_id = _cron_pipeline_id
                 except Exception:
@@ -343,7 +348,7 @@ class LifecycleMixin:
                     self._activity.current_pipeline_id = _cron_pipeline_id
                     try:
                         self.agent._tool_handler._activity.current_pipeline_id = _cron_pipeline_id
-                    except Exception:
+                    except AttributeError:
                         pass
 
                 prompt = self._build_cron_prompt(
@@ -403,7 +408,7 @@ class LifecycleMixin:
                     try:
                         self.agent._tool_handler._current_pipeline_id = ""
                         self.agent._tool_handler._activity.current_pipeline_id = ""
-                    except Exception:
+                    except AttributeError:
                         pass
         finally:
             self._notify_lock_released()

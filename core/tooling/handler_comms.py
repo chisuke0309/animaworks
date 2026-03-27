@@ -196,7 +196,7 @@ class CommsToolsMixin:
                 # Prefer in_progress; fall back to most recent pending
                 in_prog = [t for t in active if t.status == "in_progress"]
                 current_task_id = (in_prog or active)[0].task_id
-        except Exception:
+        except (OSError, IndexError, KeyError):
             pass
 
         # ── Internal messaging ──

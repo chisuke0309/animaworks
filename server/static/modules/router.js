@@ -63,6 +63,7 @@ function registerRoutes() {
   routes["/logs"] = () => import("../pages/logs.js" + _v);
   routes["/assets"] = () => import("../pages/assets.js" + _v);
   routes["/tool-prompts"] = () => import("../pages/tool-prompts.js" + _v);
+  routes["/approvals"] = () => import("../pages/approvals.js" + _v);
 }
 
 // ── Route Handler ───────────────────────────

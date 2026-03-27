@@ -260,7 +260,7 @@ def _scan_all_animas(animas_dir: Path) -> dict[str, Any]:
                     speciality = data["speciality"] or None
                     status_has_speciality = True
                 role = data.get("role") or None
-            except Exception:
+            except (OSError, json.JSONDecodeError, KeyError):
                 pass
 
         # Fallback to config.animas when status.json omits the field

@@ -100,7 +100,7 @@ class InboxMixin:
                     # ToolHandler に設定して send_message で使えるようにする
                     try:
                         self.agent._tool_handler._current_pipeline_id = _pipeline_id
-                    except Exception:
+                    except AttributeError:
                         pass
 
                     if inbox_result.unread_count == 0:

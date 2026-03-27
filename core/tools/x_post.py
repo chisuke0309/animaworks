@@ -8,6 +8,8 @@
 """X (Twitter) Post tool for AnimaWorks.
 
 Posts tweets and threads via X API v2 with OAuth 1.0a authentication.
+Includes pending approval flow: save_pending → Web UI approve → execute_pending.
+
 Credentials are read from .env:
   TWITTER_API_KEY, TWITTER_API_SECRET,
   TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET
@@ -19,9 +21,12 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import time
 import urllib.parse
 import uuid
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -163,17 +168,22 @@ class XPostClient:
         response.raise_for_status()
         return response.json()
 
+    # X Premium allows up to 25,000 characters per post.
+    MAX_CHARS = 25_000
+    # Legacy 280-char limit for threads (each individual tweet).
+    MAX_CHARS_THREAD = 280
+
     def post_tweet(self, text: str) -> dict:
         """Post a single tweet.
 
         Args:
-            text: Tweet text (max 280 characters).
+            text: Tweet text (max 25,000 characters for X Premium).
 
         Returns:
             API response dict with tweet id and text.
         """
-        if len(text) > 280:
-            raise ValueError(f"Tweet text too long ({len(text)} chars, max 280).")
+        if len(text) > self.MAX_CHARS:
+            raise ValueError(f"Tweet text too long ({len(text)} chars, max {self.MAX_CHARS}).")
         result = self._post({"text": text})
         tweet_id = result.get("data", {}).get("id", "")
         logger.info("Tweet posted: id=%s", tweet_id)
@@ -195,9 +205,9 @@ class XPostClient:
         reply_to_id: str | None = None
 
         for i, text in enumerate(texts):
-            if len(text) > 280:
+            if len(text) > self.MAX_CHARS_THREAD:
                 raise ValueError(
-                    f"Tweet #{i + 1} too long ({len(text)} chars, max 280)."
+                    f"Tweet #{i + 1} too long ({len(text)} chars, max {self.MAX_CHARS_THREAD})."
                 )
             body: dict[str, Any] = {"text": text}
             if reply_to_id:
@@ -213,6 +223,105 @@ class XPostClient:
 
 
 # ---------------------------------------------------------------------------
+# Pending post approval flow
+# ---------------------------------------------------------------------------
+
+PENDING_DIR = Path(os.path.expanduser("~/.animaworks/pending_posts"))
+
+
+def _ensure_pending_dir() -> Path:
+    """Ensure the pending posts directory exists."""
+    PENDING_DIR.mkdir(parents=True, exist_ok=True)
+    return PENDING_DIR
+
+
+def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
+    """Save a tweet draft for human approval.
+
+    Creates a JSON file in ~/.animaworks/pending_posts/.
+
+    Args:
+        text: Tweet text.
+        slot: Time slot label (e.g. 'morning', 'evening').
+        anima: Name of the anima saving the draft.
+
+    Returns:
+        Dict with draft id and file path.
+    """
+    _ensure_pending_dir()
+    jst = timezone(timedelta(hours=9))
+    now = datetime.now(jst)
+    ts = now.strftime("%Y%m%dT%H%M%S")
+    draft_id = f"{ts}_{slot}"
+    filename = f"{draft_id}.json"
+
+    draft = {
+        "id": draft_id,
+        "text": text,
+        "slot": slot,
+        "anima": anima,
+        "created_at": now.isoformat(),
+        "status": "pending",
+        "char_count": len(text),
+    }
+
+    filepath = PENDING_DIR / filename
+    filepath.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.info("Pending post saved: %s (%d chars)", draft_id, len(text))
+    return {"success": True, "id": draft_id, "path": str(filepath), "message": "Draft saved for approval"}
+
+
+def execute_pending_posts(slot: str) -> dict:
+    """Execute approved pending posts for a given slot.
+
+    Finds all approved posts matching the slot, posts them via X API,
+    and deletes the files on success.
+
+    Args:
+        slot: Time slot to process (e.g. 'morning', 'evening').
+
+    Returns:
+        Dict with results.
+    """
+    _ensure_pending_dir()
+    posted = []
+    errors = []
+
+    for filepath in sorted(PENDING_DIR.glob("*.json")):
+        try:
+            draft = json.loads(filepath.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        if draft.get("status") != "approved" or draft.get("slot") != slot:
+            continue
+
+        try:
+            client = XPostClient()
+            result = client.post_tweet(text=draft["text"])
+            tweet_id = result.get("data", {}).get("id", "")
+            logger.info("Pending post executed: %s → tweet %s", draft["id"], tweet_id)
+            filepath.unlink()  # Delete on success
+            posted.append({
+                "id": draft["id"],
+                "tweet_id": tweet_id,
+                "url": f"https://x.com/i/web/status/{tweet_id}",
+            })
+        except Exception as e:
+            logger.error("Failed to execute pending post %s: %s", draft["id"], e)
+            errors.append({"id": draft["id"], "error": str(e)})
+
+    return {
+        "success": len(errors) == 0,
+        "slot": slot,
+        "posted": posted,
+        "posted_count": len(posted),
+        "errors": errors,
+        "message": f"{len(posted)} post(s) executed for slot '{slot}'" if posted else f"No approved posts for slot '{slot}'",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Anthropic tool_use schemas
 # ---------------------------------------------------------------------------
 
@@ -223,7 +332,7 @@ def get_tool_schemas() -> list[dict]:
             "name": "x_post",
             "description": (
                 "Post a tweet to X (Twitter). "
-                "Text must be 280 characters or less. "
+                "X Premium account: up to 25,000 characters per post. "
                 "Use this to share news, insights, or AI/DX trend summaries."
             ),
             "input_schema": {
@@ -231,7 +340,7 @@ def get_tool_schemas() -> list[dict]:
                 "properties": {
                     "text": {
                         "type": "string",
-                        "description": "Tweet text (max 280 characters).",
+                        "description": "Tweet text (X Premium: max 25,000 characters).",
                     },
                 },
                 "required": ["text"],
@@ -241,8 +350,8 @@ def get_tool_schemas() -> list[dict]:
             "name": "x_post_thread",
             "description": (
                 "Post a thread (multiple connected tweets) to X (Twitter). "
-                "Each tweet must be 280 characters or less. "
-                "Use this for longer articles or step-by-step explanations."
+                "Each tweet must be 280 characters or less (thread limit). "
+                "Note: For long-form content, prefer single post (up to 25,000 chars) over threads."
             ),
             "input_schema": {
                 "type": "object",
@@ -260,6 +369,46 @@ def get_tool_schemas() -> list[dict]:
                 "required": ["texts"],
             },
         },
+        {
+            "name": "x_post_save_pending",
+            "description": (
+                "Save a tweet draft for human approval before posting to X. "
+                "The draft will appear in the Web UI for review. "
+                "Do NOT post directly with x_post — always use this tool instead."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Tweet text (X Premium: max 25,000 characters).",
+                    },
+                    "slot": {
+                        "type": "string",
+                        "description": "Time slot label (e.g. 'morning', 'evening').",
+                    },
+                },
+                "required": ["text", "slot"],
+            },
+        },
+        {
+            "name": "x_post_execute_pending",
+            "description": (
+                "Execute approved pending posts for a given time slot. "
+                "Used by cron to post drafts that have been approved in the Web UI. "
+                "Do NOT call this from LLM sessions — it is cron-only."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "slot": {
+                        "type": "string",
+                        "description": "Time slot to process (e.g. 'morning', 'evening').",
+                    },
+                },
+                "required": ["slot"],
+            },
+        },
     ]
 
 
@@ -267,6 +416,19 @@ def get_tool_schemas() -> list[dict]:
 
 def dispatch(name: str, args: dict[str, Any]) -> Any:
     """Dispatch a tool call by schema name."""
+
+    if name == "x_post_save_pending":
+        anima_dir = args.pop("anima_dir", "")
+        anima_name = Path(anima_dir).name if anima_dir else "unknown"
+        return save_pending_post(
+            text=args["text"],
+            slot=args["slot"],
+            anima=anima_name,
+        )
+
+    if name == "x_post_execute_pending":
+        return execute_pending_posts(slot=args["slot"])
+
     client = XPostClient()
 
     if name == "x_post":

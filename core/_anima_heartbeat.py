@@ -371,7 +371,7 @@ class HeartbeatMixin:
                 self.agent._tool_handler._activity.current_pipeline_id = (
                     self.agent._tool_handler._current_pipeline_id
                 )
-            except Exception:
+            except AttributeError:
                 pass
 
         try:

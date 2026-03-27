@@ -1,0 +1,298 @@
+/* ── Tasks Page Layout ── */
+.tasks-page-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+/* ── Sidebar ── */
+.tasks-sidebar {
+  width: 300px;
+  min-width: 260px;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-sidebar);
+}
+
+.tasks-sidebar-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tasks-sidebar-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.tasks-refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+}
+
+.tasks-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+/* ── Task list items ── */
+.task-item {
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+  background-color: var(--bg-secondary);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.task-item:hover { background-color: var(--bg-hover); }
+.task-item.active {
+  border-color: var(--accent-color);
+  background-color: var(--bg-active);
+}
+
+.task-item-title {
+  font-weight: 500;
+  margin-bottom: 0.3rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-item-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  gap: 0.5rem;
+}
+
+.task-route {
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.task-sub-count {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  background-color: var(--bg-tertiary);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+/* ── Status badges ── */
+.task-status {
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-tertiary);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.task-status.status-pending     { color: var(--color-warning); }
+.task-status.status-in_progress { color: var(--color-info); }
+.task-status.status-done,
+.task-status.status-completed   { color: var(--color-success); }
+.task-status.status-blocked,
+.task-status.status-cancelled   { color: var(--color-error); }
+.task-status.status-delegated   { color: var(--text-secondary); }
+
+/* ── Main panel ── */
+.tasks-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+.tasks-main-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+}
+
+/* ── Detail view ── */
+.tasks-detail-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tasks-detail-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.tasks-detail-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tasks-detail-title-row h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.task-meta {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.tasks-detail-route {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* ── Chat timeline ── */
+.tasks-chat-timeline {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Instruction block (first message / delegation) */
+.tl-instruction {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--accent-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+}
+
+.tl-instruction-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.tl-badge {
+  background-color: var(--accent-color);
+  color: white;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+  margin-left: auto;
+}
+
+.tl-instruction-body {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Status update event */
+.tl-status-event {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  justify-content: center;
+  padding: 0.25rem 0;
+}
+
+.tl-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.tl-status-dot.status-done,
+.tl-status-dot.status-completed { background-color: var(--color-success); }
+.tl-status-dot.status-in_progress { background-color: var(--color-info); }
+.tl-status-dot.status-blocked { background-color: var(--color-error); }
+
+/* Message bubbles */
+.tl-message {
+  display: flex;
+  max-width: 80%;
+}
+
+.tl-message-left  { align-self: flex-start; }
+.tl-message-right { align-self: flex-end; }
+
+.tl-bubble {
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  max-width: 100%;
+}
+
+.tl-message-right .tl-bubble {
+  background-color: var(--bg-active, #e8f0fe);
+}
+
+.tl-bubble-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.tl-sender {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tl-arrow { color: var(--text-tertiary); }
+.tl-assignee { color: var(--text-secondary); }
+
+.tl-time {
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.tl-bubble-body {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Shared utilities */
+.tasks-loading,
+.tasks-error,
+.tasks-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.tasks-error { color: var(--color-error); }
