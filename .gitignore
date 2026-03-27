@@ -34,4 +34,3 @@ tests/evaluation/_experiment_data/
 # Evaluation results - tracked in repo for reproducibility
 # tests/evaluation/results/ is committed
 .cursor/
-.claude/worktrees/
