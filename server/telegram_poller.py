@@ -162,6 +162,11 @@ class TelegramPollerManager:
             username, self._target_anima, len(text),
         )
 
+        # Check for approval command (OK / ok / 承認)
+        if text.lower() in ("ok", "承認"):
+            await self._handle_approval_reply(chat_id, text)
+            return
+
         try:
             from core.messenger import Messenger
             shared_dir = get_data_dir() / "shared"
@@ -177,3 +182,58 @@ class TelegramPollerManager:
             logger.exception(
                 "Telegram poller: failed to route message to anima=%s", self._target_anima
             )
+
+    async def _handle_approval_reply(self, chat_id: str, text: str) -> None:
+        """Approve the most recent pending post when user replies OK."""
+        try:
+            from core.tools.x_post import PENDING_DIR
+
+            if not PENDING_DIR.exists():
+                await self._send_message(chat_id, "承認対象の投稿がありません。")
+                return
+
+            # Find the latest pending post
+            pending_files = sorted(
+                (f for f in PENDING_DIR.glob("*.json")),
+                key=lambda f: f.stat().st_mtime,
+                reverse=True,
+            )
+
+            approved = None
+            for fp in pending_files:
+                try:
+                    data = json.loads(fp.read_text(encoding="utf-8"))
+                    if data.get("status") == "pending":
+                        data["status"] = "approved"
+                        fp.write_text(
+                            json.dumps(data, ensure_ascii=False, indent=2),
+                            encoding="utf-8",
+                        )
+                        approved = data
+                        logger.info("Telegram approval: %s", data.get("id", fp.stem))
+                        break
+                except (json.JSONDecodeError, OSError):
+                    continue
+
+            if approved:
+                preview = approved.get("text", "")[:100]
+                await self._send_message(
+                    chat_id,
+                    f"✅ 承認しました: {approved.get('id', '?')}\n{preview}…",
+                )
+            else:
+                await self._send_message(chat_id, "承認待ちの投稿がありません。")
+        except Exception:
+            logger.exception("Telegram approval handler failed")
+            await self._send_message(chat_id, "承認処理中にエラーが発生しました。")
+
+    async def _send_message(self, chat_id: str, text: str) -> None:
+        """Send a message back to the Telegram chat."""
+        url = f"{_TELEGRAM_API_BASE}/bot{self._token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": text[:4096]}
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+        except Exception:
+            logger.warning("Failed to send Telegram reply to %s", chat_id, exc_info=True)

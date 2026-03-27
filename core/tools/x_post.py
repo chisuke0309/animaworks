@@ -29,9 +29,31 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
+import re
+
 import httpx
 
 from core.tools._base import ToolConfigError, get_credential, logger
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove Markdown formatting that has no effect on X (Twitter).
+
+    Strips bold (``**``/``__``), italic (``*``/``_``), inline code
+    (`` ` ``), strikethrough (``~~``), and heading markers (``# ``).
+    """
+    # Bold / italic: **text**, __text__, *text*, _text_
+    text = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", text)
+    text = re.sub(r"_{1,3}(.+?)_{1,3}", r"\1", text)
+    # Strikethrough: ~~text~~
+    text = re.sub(r"~~(.+?)~~", r"\1", text)
+    # Inline code: `text`
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    # Heading markers: # / ## / ###
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+    # Bullet markers: - item / * item (preserve the text)
+    text = re.sub(r"^[\-\*]\s+", "・", text, flags=re.MULTILINE)
+    return text
 
 # ── Execution Profile ─────────────────────────────────────
 
@@ -182,6 +204,7 @@ class XPostClient:
         Returns:
             API response dict with tweet id and text.
         """
+        text = _strip_markdown(text)
         if len(text) > self.MAX_CHARS:
             raise ValueError(f"Tweet text too long ({len(text)} chars, max {self.MAX_CHARS}).")
         result = self._post({"text": text})
@@ -235,6 +258,42 @@ def _ensure_pending_dir() -> Path:
     return PENDING_DIR
 
 
+def _notify_pending_post(
+    draft_id: str, text: str, slot: str, anima: str,
+) -> None:
+    """Fire-and-forget Telegram notification for a new pending post."""
+    import asyncio
+
+    async def _send() -> None:
+        try:
+            from core.config.models import load_config
+            from core.notification.notifier import HumanNotifier
+
+            config = load_config()
+            notifier = HumanNotifier.from_config(config.human_notification)
+            if not notifier.channel_count:
+                return
+
+            preview = text[:300] + ("…" if len(text) > 300 else "")
+            subject = f"X投稿承認依頼: {slot} ({anima})"
+            body = (
+                f"ID: {draft_id}\n"
+                f"文字数: {len(text)}\n\n"
+                f"{preview}\n\n"
+                f"Web UIまたはTelegramで「OK」と返信して承認してください。"
+            )
+            await notifier.notify(subject, body, priority="normal", anima_name=anima)
+        except Exception:
+            logger.warning("Failed to send approval notification for %s", draft_id, exc_info=True)
+
+    # Schedule in the running event loop if available, otherwise skip
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_send(), name=f"notify-pending-{draft_id}")
+    except RuntimeError:
+        logger.debug("No running event loop — skipping Telegram notification for %s", draft_id)
+
+
 def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
     """Save a tweet draft for human approval.
 
@@ -249,6 +308,7 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
         Dict with draft id and file path.
     """
     _ensure_pending_dir()
+    text = _strip_markdown(text)
     jst = timezone(timedelta(hours=9))
     now = datetime.now(jst)
     ts = now.strftime("%Y%m%dT%H%M%S")
@@ -268,6 +328,10 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
     filepath = PENDING_DIR / filename
     filepath.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info("Pending post saved: %s (%d chars)", draft_id, len(text))
+
+    # Send Telegram notification for approval
+    _notify_pending_post(draft_id, text, slot, anima)
+
     return {"success": True, "id": draft_id, "path": str(filepath), "message": "Draft saved for approval"}
 
 

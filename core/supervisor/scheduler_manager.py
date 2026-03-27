@@ -243,25 +243,45 @@ class SchedulerManager:
 
         logger.info("Scheduled cron: %s -> %s [%s]", self._anima_name, task.name, task.type)
 
-        # If a heartbeat ran within the last 120s, reuse its pipeline_id
-        # so the UI groups heartbeat + cron as a single pipeline entry.
+        # Run in separate task to avoid blocking other scheduled jobs.
+        # pipeline_id resolution is deferred to _run_cron_task so it can
+        # wait for a concurrent heartbeat to finish first.
+        asyncio.create_task(
+            self._run_cron_task(task),
+            name=f"cron-{self._anima_name}-{task.name}",
+        )
+
+    async def _resolve_pipeline_id(self) -> str:
+        """Wait for a concurrent heartbeat (if running) and return its pipeline_id.
+
+        If no heartbeat is running, checks whether one finished recently
+        (within ``_PIPELINE_REUSE_WINDOW_SEC``) and reuses that id.
+        Returns an empty string when no heartbeat pipeline is available.
+        """
         import time
-        reuse_pipeline_id = ""
+
+        # If a heartbeat is currently running, wait for it to finish so we
+        # can reuse its pipeline_id (max 90s to avoid deadlock).
+        if self._heartbeat_running:
+            logger.info(
+                "Cron waiting for concurrent heartbeat to finish for %s",
+                self._anima_name,
+            )
+            for _ in range(90):
+                await asyncio.sleep(1)
+                if not self._heartbeat_running:
+                    break
+
         if (
             self._last_heartbeat_pipeline_id
             and (time.time() - self._last_heartbeat_ts) < _PIPELINE_REUSE_WINDOW_SEC
         ):
-            reuse_pipeline_id = self._last_heartbeat_pipeline_id
             logger.info(
-                "Cron '%s' reusing heartbeat pipeline_id=%s for %s",
-                task.name, reuse_pipeline_id, self._anima_name,
+                "Cron reusing heartbeat pipeline_id=%s for %s",
+                self._last_heartbeat_pipeline_id, self._anima_name,
             )
-
-        # Run in separate task to avoid blocking other scheduled jobs
-        asyncio.create_task(
-            self._run_cron_task(task, pipeline_id=reuse_pipeline_id),
-            name=f"cron-{self._anima_name}-{task.name}",
-        )
+            return self._last_heartbeat_pipeline_id
+        return ""
 
     async def _run_cron_task(
         self, task: CronTask, *, pipeline_id: str = ""
@@ -269,6 +289,11 @@ class SchedulerManager:
         """Run a single cron task (LLM or command type)."""
         if not self._anima:
             return
+
+        # Resolve pipeline_id: wait for concurrent heartbeat if needed
+        if not pipeline_id:
+            pipeline_id = await self._resolve_pipeline_id()
+
         self._cron_running.add(task.name)
         try:
             if task.type == "llm":
