@@ -29,6 +29,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_TIMEZONE = "Asia/Tokyo"
+_MISFIRE_GRACE_TIME = 300
+_MAX_JOB_INSTANCES = 1
+_PIPELINE_REUSE_WINDOW_SEC = 120
+
 
 class SchedulerManager:
     """APScheduler management: heartbeat/cron registration, execution, reload."""
@@ -50,6 +55,8 @@ class SchedulerManager:
         self._cron_running: set[str] = set()
         self._cron_md_mtime: float = 0.0
         self._heartbeat_md_mtime: float = 0.0
+        self._last_heartbeat_pipeline_id: str = ""
+        self._last_heartbeat_ts: float = 0.0
 
     # ── Public Properties ────────────────────────────────────────
 
@@ -70,7 +77,7 @@ class SchedulerManager:
             return
 
         try:
-            self.scheduler = AsyncIOScheduler(timezone="Asia/Tokyo")
+            self.scheduler = AsyncIOScheduler(timezone=_DEFAULT_TIMEZONE)
             self._setup_heartbeat()
             self._setup_cron_tasks()
             self.scheduler.start()
@@ -134,8 +141,8 @@ class SchedulerManager:
             id=f"{self._anima_name}_heartbeat",
             name=f"{self._anima_name} heartbeat",
             replace_existing=True,
-            misfire_grace_time=300,
-            max_instances=1,
+            misfire_grace_time=_MISFIRE_GRACE_TIME,
+            max_instances=_MAX_JOB_INSTANCES,
         )
         logger.info(
             "Heartbeat registered: %s minute=%s (offset=%d, interval=%dmin), %s",
@@ -168,8 +175,8 @@ class SchedulerManager:
                 name=f"{self._anima_name}: {task.name}",
                 args=[task],
                 replace_existing=True,
-                misfire_grace_time=300,
-                max_instances=1,
+                misfire_grace_time=_MISFIRE_GRACE_TIME,
+                max_instances=_MAX_JOB_INSTANCES,
             )
             logger.info(
                 "Cron registered: %s -> %s (%s) [%s]",
@@ -191,6 +198,19 @@ class SchedulerManager:
         try:
             logger.info("Scheduled heartbeat: %s", self._anima_name)
             result = await self._anima.run_heartbeat()
+
+            # Capture heartbeat's pipeline_id for cron tasks in the same minute.
+            # _last_pipeline_id is set on the anima before cleanup clears the
+            # active pipeline_id, so it survives the finally block.
+            import time
+            self._last_heartbeat_ts = time.time()
+            try:
+                self._last_heartbeat_pipeline_id = getattr(
+                    self._anima, "_last_pipeline_id", ""
+                ) or ""
+            except Exception:
+                self._last_heartbeat_pipeline_id = ""
+
             # Notify parent for WebSocket broadcast
             self._emit_event("anima.heartbeat", {
                 "name": self._anima_name,
@@ -222,20 +242,39 @@ class SchedulerManager:
             return
 
         logger.info("Scheduled cron: %s -> %s [%s]", self._anima_name, task.name, task.type)
+
+        # If a heartbeat ran within the last 120s, reuse its pipeline_id
+        # so the UI groups heartbeat + cron as a single pipeline entry.
+        import time
+        reuse_pipeline_id = ""
+        if (
+            self._last_heartbeat_pipeline_id
+            and (time.time() - self._last_heartbeat_ts) < _PIPELINE_REUSE_WINDOW_SEC
+        ):
+            reuse_pipeline_id = self._last_heartbeat_pipeline_id
+            logger.info(
+                "Cron '%s' reusing heartbeat pipeline_id=%s for %s",
+                task.name, reuse_pipeline_id, self._anima_name,
+            )
+
         # Run in separate task to avoid blocking other scheduled jobs
         asyncio.create_task(
-            self._run_cron_task(task),
+            self._run_cron_task(task, pipeline_id=reuse_pipeline_id),
             name=f"cron-{self._anima_name}-{task.name}",
         )
 
-    async def _run_cron_task(self, task: CronTask) -> None:
+    async def _run_cron_task(
+        self, task: CronTask, *, pipeline_id: str = ""
+    ) -> None:
         """Run a single cron task (LLM or command type)."""
         if not self._anima:
             return
         self._cron_running.add(task.name)
         try:
             if task.type == "llm":
-                result = await self._anima.run_cron_task(task.name, task.description)
+                result = await self._anima.run_cron_task(
+                    task.name, task.description, pipeline_id=pipeline_id,
+                )
                 self._emit_event("anima.cron", {
                     "name": self._anima_name,
                     "task": task.name,
@@ -294,6 +333,7 @@ class SchedulerManager:
                         task.name,
                         task.description or f"cron.mdの「{task.name}」の指示に従って処理してください。",
                         command_output=stdout,
+                        pipeline_id=pipeline_id,
                     )
             else:
                 logger.warning("Unknown cron type '%s' for task '%s'", task.type, task.name)

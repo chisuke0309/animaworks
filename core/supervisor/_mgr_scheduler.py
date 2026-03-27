@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,6 +19,8 @@ from core.supervisor.process_handle import ProcessState
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_TIMEZONE = "Asia/Tokyo"
+
 
 class SchedulerMixin:
     """System-level cron scheduler for memory consolidation and log rotation."""
@@ -25,7 +28,7 @@ class SchedulerMixin:
     def _start_system_scheduler(self) -> None:
         """Start the system-level scheduler for consolidation crons."""
         try:
-            self.scheduler = AsyncIOScheduler(timezone="Asia/Tokyo")
+            self.scheduler = AsyncIOScheduler(timezone=_DEFAULT_TIMEZONE)
             self._setup_system_crons()
             self.scheduler.start()
             self._scheduler_running = True
@@ -35,97 +38,74 @@ class SchedulerMixin:
             self.scheduler = None
             self._scheduler_running = False
 
+    @staticmethod
+    def _load_config_attr(attr: str, context: str) -> Any:
+        """Load a top-level config attribute, returning ``None`` on failure."""
+        try:
+            from core.config import load_config
+            return getattr(load_config(), attr, None)
+        except Exception:
+            logger.debug("Config load failed for %s", context, exc_info=True)
+            return None
+
+    @staticmethod
+    def _parse_time_spec(time_str: str) -> dict[str, int]:
+        """Parse ``HH:MM``, ``day:HH:MM``, or ``dom:HH:MM`` into CronTrigger kwargs.
+
+        Returns a dict with keys like ``hour``, ``minute``, and optionally
+        ``day_of_week`` or ``day``.
+        """
+        parts = time_str.split(":")
+        hour, minute = int(parts[-2]), int(parts[-1])
+        kwargs: dict[str, int] = {"hour": hour, "minute": minute}
+        if len(parts) == 3:
+            prefix = parts[0]
+            # Numeric prefix → day of month, alpha → day of week
+            if prefix.isdigit():
+                kwargs["day"] = int(prefix)
+            else:
+                kwargs["day_of_week"] = prefix  # type: ignore[assignment]
+        return kwargs
+
     def _setup_system_crons(self) -> None:
         """Register system-wide cron jobs for memory consolidation."""
         if not self.scheduler:
             return
 
-        # Load consolidation config
-        try:
-            from core.config import load_config
-            config = load_config()
-            consolidation_cfg = getattr(config, "consolidation", None)
-        except Exception:
-            logger.debug("Config load failed for consolidation schedule", exc_info=True)
-            consolidation_cfg = None
+        consolidation_cfg = self._load_config_attr("consolidation", "consolidation schedule")
 
-        # Daily consolidation
-        daily_enabled = True
-        daily_time = "02:00"
-        if consolidation_cfg:
-            daily_enabled = getattr(consolidation_cfg, "daily_enabled", True)
-            daily_time = getattr(consolidation_cfg, "daily_time", "02:00")
+        # ── Consolidation jobs (daily / weekly / monthly) ────────
+        _CONSOLIDATION_JOBS: list[tuple[str, str, str, str, Any]] = [
+            # (enabled_attr, time_attr, default_time, job_id, callback)
+            ("daily_enabled", "daily_time", "02:00",
+             "system_daily_consolidation", self._run_daily_consolidation),
+            ("weekly_enabled", "weekly_time", "sun:03:00",
+             "system_weekly_integration", self._run_weekly_integration),
+            ("monthly_enabled", "monthly_time", "1:04:00",
+             "system_monthly_forgetting", self._run_monthly_forgetting),
+        ]
 
-        if daily_enabled:
-            hour, minute = (int(x) for x in daily_time.split(":"))
+        for enabled_attr, time_attr, default_time, job_id, callback in _CONSOLIDATION_JOBS:
+            enabled = getattr(consolidation_cfg, enabled_attr, True) if consolidation_cfg else True
+            time_str = getattr(consolidation_cfg, time_attr, default_time) if consolidation_cfg else default_time
+            if not enabled:
+                continue
+            trigger_kwargs = self._parse_time_spec(time_str)
             self.scheduler.add_job(
-                self._run_daily_consolidation,
-                CronTrigger(hour=hour, minute=minute),
-                id="system_daily_consolidation",
-                name="System: Daily Consolidation",
+                callback,
+                CronTrigger(**trigger_kwargs),
+                id=job_id,
+                name=f"System: {job_id.replace('system_', '').replace('_', ' ').title()}",
                 replace_existing=True,
             )
-            logger.info("System cron: Daily consolidation at %s JST", daily_time)
+            logger.info("System cron: %s at %s JST", job_id, time_str)
 
-        # Weekly integration
-        weekly_enabled = True
-        weekly_time = "sun:03:00"
-        if consolidation_cfg:
-            weekly_enabled = getattr(consolidation_cfg, "weekly_enabled", True)
-            weekly_time = getattr(consolidation_cfg, "weekly_time", "sun:03:00")
-
-        if weekly_enabled:
-            parts = weekly_time.split(":")
-            day_of_week = parts[0] if len(parts) == 3 else "sun"
-            time_parts = parts[-2:]
-            hour, minute = int(time_parts[0]), int(time_parts[1])
-            self.scheduler.add_job(
-                self._run_weekly_integration,
-                CronTrigger(day_of_week=day_of_week, hour=hour, minute=minute),
-                id="system_weekly_integration",
-                name="System: Weekly Integration",
-                replace_existing=True,
-            )
-            logger.info("System cron: Weekly integration on %s at %s:%s JST", day_of_week, time_parts[0], time_parts[1])
-
-        # Monthly forgetting
-        monthly_enabled = True
-        monthly_time = "1:04:00"
-        if consolidation_cfg:
-            monthly_enabled = getattr(consolidation_cfg, "monthly_enabled", True)
-            monthly_time = getattr(consolidation_cfg, "monthly_time", "1:04:00")
-
-        if monthly_enabled:
-            parts = monthly_time.split(":")
-            day_of_month = int(parts[0]) if len(parts) == 3 else 1
-            time_parts = parts[-2:]
-            hour, minute = int(time_parts[0]), int(time_parts[1])
-            self.scheduler.add_job(
-                self._run_monthly_forgetting,
-                CronTrigger(day=day_of_month, hour=hour, minute=minute),
-                id="system_monthly_forgetting",
-                name="System: Monthly Forgetting",
-                replace_existing=True,
-            )
-            logger.info(
-                "System cron: Monthly forgetting on day %d at %02d:%02d JST",
-                day_of_month, hour, minute,
-            )
-
-        # Activity log rotation
+        # ── Activity log rotation ────────────────────────────────
         try:
             from core.config.models import ActivityLogConfig
 
-            activity_cfg: ActivityLogConfig | None = None
-            try:
-                from core.config import load_config as _load_cfg
-                _al = getattr(_load_cfg(), "activity_log", None)
-                if isinstance(_al, ActivityLogConfig):
-                    activity_cfg = _al
-            except Exception:
-                logger.debug("Config load failed for activity_log rotation schedule", exc_info=True)
-
-            if activity_cfg is None:
+            activity_cfg = self._load_config_attr("activity_log", "activity_log rotation schedule")
+            if not isinstance(activity_cfg, ActivityLogConfig):
                 activity_cfg = ActivityLogConfig()
 
             if activity_cfg.rotation_enabled:
@@ -172,18 +152,10 @@ class SchedulerMixin:
         """
         logger.info("Starting system-wide daily consolidation")
 
-        try:
-            from core.config import load_config
-            config = load_config()
-            consolidation_cfg = getattr(config, "consolidation", None)
-        except Exception:
-            logger.debug("Config load failed for daily consolidation", exc_info=True)
-            consolidation_cfg = None
-
         from core.config.models import ConsolidationConfig
-        max_turns = ConsolidationConfig().max_turns
-        if consolidation_cfg:
-            max_turns = getattr(consolidation_cfg, "max_turns", max_turns)
+        consolidation_cfg = self._load_config_attr("consolidation", "daily consolidation")
+        default_max = ConsolidationConfig().max_turns
+        max_turns = getattr(consolidation_cfg, "max_turns", default_max) if consolidation_cfg else default_max
 
         for anima_name, anima_dir in self._iter_consolidation_targets():
             handle = self.processes.get(anima_name)
@@ -260,18 +232,10 @@ class SchedulerMixin:
         """
         logger.info("Starting system-wide weekly integration")
 
-        try:
-            from core.config import load_config
-            config = load_config()
-            consolidation_cfg = getattr(config, "consolidation", None)
-        except Exception:
-            logger.debug("Config load failed for weekly integration", exc_info=True)
-            consolidation_cfg = None
-
         from core.config.models import ConsolidationConfig as _CC
-        max_turns = _CC().max_turns
-        if consolidation_cfg:
-            max_turns = getattr(consolidation_cfg, "max_turns", max_turns)
+        consolidation_cfg = self._load_config_attr("consolidation", "weekly integration")
+        default_max = _CC().max_turns
+        max_turns = getattr(consolidation_cfg, "max_turns", default_max) if consolidation_cfg else default_max
 
         for anima_name, anima_dir in self._iter_consolidation_targets():
             handle = self.processes.get(anima_name)
@@ -374,12 +338,7 @@ class SchedulerMixin:
         """Run activity log rotation for all animas."""
         logger.info("Starting system-wide activity log rotation")
 
-        try:
-            from core.config import load_config
-            activity_cfg = getattr(load_config(), "activity_log", None)
-        except Exception:
-            logger.debug("Config load failed for activity log rotation", exc_info=True)
-            activity_cfg = None
+        activity_cfg = self._load_config_attr("activity_log", "activity log rotation")
 
         from core.config.models import ActivityLogConfig
         defaults = ActivityLogConfig()

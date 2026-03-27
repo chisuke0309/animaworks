@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 _PENDING_WATCHER_POLL_INTERVAL = 3.0
 _LLM_TASK_TTL_HOURS = 24
 _PENDING_TASK_SUBPROCESS_TIMEOUT = 1800
+_SUMMARY_TRUNCATE = 500
+_ACTIVITY_SUMMARY_TRUNCATE = 200
+_NOTIFY_TRUNCATE = 1000
 
 
 class PendingTaskExecutor:
@@ -59,48 +62,8 @@ class PendingTaskExecutor:
 
         while not self._shutdown_event.is_set():
             try:
-                for path in sorted(pending_dir.glob("*.json")):
-                    try:
-                        task_desc = json.loads(path.read_text(encoding="utf-8"))
-                        path.unlink()  # Remove immediately to prevent double execution
-                        logger.info(
-                            "Picked up pending task: id=%s tool=%s subcmd=%s anima=%s",
-                            task_desc.get("task_id", "?"),
-                            task_desc.get("tool_name", "?"),
-                            task_desc.get("subcommand", ""),
-                            self._anima_name,
-                        )
-                        await self.execute_pending_task(task_desc)
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            "Invalid JSON in pending task file: %s", path.name,
-                        )
-                        path.unlink(missing_ok=True)
-                    except Exception:
-                        logger.exception(
-                            "Error processing pending task file: %s", path.name,
-                        )
-
-                # Scan LLM pending tasks
-                for path in sorted(llm_pending_dir.glob("*.json")):
-                    try:
-                        task_desc = json.loads(path.read_text(encoding="utf-8"))
-                        path.unlink()
-                        logger.info(
-                            "Picked up LLM pending task: id=%s anima=%s",
-                            task_desc.get("task_id", "?"),
-                            self._anima_name,
-                        )
-                        await self.execute_pending_task(task_desc)
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            "Invalid JSON in LLM pending task file: %s", path.name,
-                        )
-                        path.unlink(missing_ok=True)
-                    except Exception:
-                        logger.exception(
-                            "Error processing LLM pending task file: %s", path.name,
-                        )
+                await self._drain_pending_dir(pending_dir, label="pending")
+                await self._drain_pending_dir(llm_pending_dir, label="LLM pending")
 
                 try:
                     await asyncio.wait_for(
@@ -123,6 +86,29 @@ class PendingTaskExecutor:
     def wake(self) -> None:
         """Signal the watcher to check for new tasks immediately."""
         self._wake_event.set()
+
+    async def _drain_pending_dir(self, directory: Path, *, label: str) -> None:
+        """Process all ``*.json`` files in *directory*, executing each as a task."""
+        for path in sorted(directory.glob("*.json")):
+            try:
+                task_desc = json.loads(path.read_text(encoding="utf-8"))
+                path.unlink()  # Remove immediately to prevent double execution
+                logger.info(
+                    "Picked up %s task: id=%s anima=%s",
+                    label,
+                    task_desc.get("task_id", "?"),
+                    self._anima_name,
+                )
+                await self.execute_pending_task(task_desc)
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Invalid JSON in %s task file: %s", label, path.name,
+                )
+                path.unlink(missing_ok=True)
+            except Exception:
+                logger.exception(
+                    "Error processing %s task file: %s", label, path.name,
+                )
 
     async def execute_pending_task(self, task_desc: dict[str, Any]) -> None:
         """Execute a pending task via BackgroundTaskManager or LLM.
@@ -307,18 +293,18 @@ class PendingTaskExecutor:
                         if chunk.get("type") == "cycle_done":
                             cycle_result = chunk.get("cycle_result", {})
                             result_summary = cycle_result.get(
-                                "summary", accumulated_text[:500]
+                                "summary", accumulated_text[:_SUMMARY_TRUNCATE]
                             )
-                            journal.finalize(summary=result_summary[:500])
+                            journal.finalize(summary=result_summary[:_SUMMARY_TRUNCATE])
                 finally:
                     journal.close()
 
                 if not result_summary:
-                    result_summary = accumulated_text[:500] or "(タスク完了)"
+                    result_summary = accumulated_text[:_SUMMARY_TRUNCATE] or "(タスク完了)"
 
                 activity.log(
                     "task_exec_end",
-                    summary=f"タスク完了: {title} — {result_summary[:200]}",
+                    summary=f"タスク完了: {title} — {result_summary[:_ACTIVITY_SUMMARY_TRUNCATE]}",
                     meta={"task_id": task_id},
                 )
 
@@ -329,7 +315,7 @@ class PendingTaskExecutor:
                             "task_complete_notify",
                             task_id=task_id,
                             title=title,
-                            result_summary=result_summary[:1000],
+                            result_summary=result_summary[:_NOTIFY_TRUNCATE],
                         )
                         self._anima.messenger.send(to=reply_to, content=notify_text)
                         logger.info(
