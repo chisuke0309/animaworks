@@ -55,13 +55,10 @@ class LifecycleMixin:
         try:
             from core.memory.task_queue import TaskQueueManager
             tq = TaskQueueManager(self.anima_dir)
-            active = [
-                t for t in tq.load_all()
-                if t.status in ("pending", "in_progress")
-            ]
+            active = tq.get_all_active()
             if active:
                 return False
-        except (OSError, KeyError):
+        except (OSError, KeyError, AttributeError):
             pass
 
         return True

@@ -31,6 +31,8 @@ from typing import Any
 
 import re
 
+from difflib import SequenceMatcher
+
 import httpx
 
 from core.tools._base import ToolConfigError, get_credential, logger
@@ -259,10 +261,21 @@ def _ensure_pending_dir() -> Path:
 
 
 def _notify_pending_post(
-    draft_id: str, text: str, slot: str, anima: str,
+    draft_id: str,
+    text: str,
+    slot: str,
+    anima: str,
+    scoring: dict | None = None,
+    *,
+    auto_approved: bool = False,
 ) -> None:
-    """Fire-and-forget Telegram notification for a new pending post."""
+    """Fire-and-forget Telegram notification for a new pending post.
+
+    Works from both async contexts (FastAPI event loop) and sync contexts
+    (tool execution in a worker thread via run_in_executor).
+    """
     import asyncio
+    import threading
 
     async def _send() -> None:
         try:
@@ -275,29 +288,191 @@ def _notify_pending_post(
                 return
 
             preview = text[:300] + ("…" if len(text) > 300 else "")
-            subject = f"X投稿承認依頼: {slot} ({anima})"
+
+            # Build score summary
+            score_line = ""
+            if scoring:
+                overall = scoring.get("overall", 0)
+                sim = scoring.get("max_similarity", 0)
+                score_line = f"品質スコア: {overall}/10.0 (類似度: {sim:.0%})\n"
+
+            if auto_approved:
+                subject = f"✅ X投稿 自動承認: {slot} ({anima})"
+                action = "自動承認されました。次のcron実行で投稿されます。"
+            else:
+                subject = f"📝 X投稿 承認依頼: {slot} ({anima})"
+                action = "「OK」と返信して承認してください。"
+
             body = (
                 f"ID: {draft_id}\n"
-                f"文字数: {len(text)}\n\n"
+                f"文字数: {len(text)}\n"
+                f"{score_line}\n"
                 f"{preview}\n\n"
-                f"Web UIまたはTelegramで「OK」と返信して承認してください。"
+                f"{action}"
             )
-            await notifier.notify(subject, body, priority="normal", anima_name=anima)
+            priority = "normal" if not auto_approved else "low"
+            await notifier.notify(subject, body, priority=priority, anima_name=anima)
         except Exception:
             logger.warning("Failed to send approval notification for %s", draft_id, exc_info=True)
 
-    # Schedule in the running event loop if available, otherwise skip
+    # Try scheduling in the running event loop (async context)
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_send(), name=f"notify-pending-{draft_id}")
+        return
     except RuntimeError:
-        logger.debug("No running event loop — skipping Telegram notification for %s", draft_id)
+        pass
+
+    # Fallback: called from a worker thread (run_in_executor).
+    # Run the async notification in a new thread with its own event loop
+    # so we don't block the caller.
+    def _send_in_thread() -> None:
+        try:
+            asyncio.run(_send())
+        except Exception:
+            logger.warning("Failed to send approval notification (thread) for %s", draft_id, exc_info=True)
+
+    t = threading.Thread(target=_send_in_thread, name=f"notify-pending-{draft_id}", daemon=True)
+    t.start()
+
+
+# ── Quality scoring ───────────────────────────────────────────
+
+# Thresholds (0.0–10.0 scale)
+_SCORE_AUTO_REJECT = 4.0    # Below this → auto-reject (not saved)
+_SCORE_AUTO_APPROVE = 8.5   # Above this → auto-approve (skip human review)
+_SIMILARITY_THRESHOLD = 0.85  # Max similarity to any recent post
+
+
+def _collect_recent_texts(limit: int = 20) -> list[str]:
+    """Collect recent post texts from pending_posts dir for similarity check."""
+    texts: list[str] = []
+    if not PENDING_DIR.exists():
+        return texts
+    for fp in sorted(PENDING_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        if len(texts) >= limit:
+            break
+        try:
+            data = json.loads(fp.read_text(encoding="utf-8"))
+            if t := data.get("text"):
+                texts.append(t)
+        except (json.JSONDecodeError, OSError):
+            continue
+    return texts
+
+
+def _max_similarity(text: str, recent_texts: list[str]) -> float:
+    """Return the highest similarity ratio against recent posts."""
+    if not recent_texts:
+        return 0.0
+    best = 0.0
+    for prev in recent_texts:
+        ratio = SequenceMatcher(None, text, prev).ratio()
+        if ratio > best:
+            best = ratio
+    return best
+
+
+def _score_post(text: str) -> dict:
+    """Score a post on quality dimensions.
+
+    Returns dict with per-dimension scores, overall score (0.0–10.0),
+    max_similarity, and gate decision.
+    """
+    scores: dict[str, float] = {}
+    char_count = len(text)
+
+    # 1. Character count — optimal range 500–2000
+    if 500 <= char_count <= 2000:
+        scores["char_count"] = 10.0
+    elif 200 <= char_count < 500:
+        scores["char_count"] = 6.0
+    elif 2000 < char_count <= 3000:
+        scores["char_count"] = 7.0
+    elif char_count < 100:
+        scores["char_count"] = 2.0
+    elif char_count < 200:
+        scores["char_count"] = 4.0
+    else:
+        scores["char_count"] = 5.0
+
+    # 2. Hashtag count — optimal 3–5
+    hashtags = re.findall(r"#\S+", text)
+    n_tags = len(hashtags)
+    if 3 <= n_tags <= 5:
+        scores["hashtags"] = 10.0
+    elif 1 <= n_tags <= 2:
+        scores["hashtags"] = 6.0
+    elif n_tags > 5:
+        scores["hashtags"] = 5.0
+    else:
+        scores["hashtags"] = 2.0
+
+    # 3. Structure — paragraphs, not a wall of text
+    lines = [ln for ln in text.strip().split("\n") if ln.strip()]
+    if len(lines) >= 4:
+        scores["structure"] = 10.0
+    elif len(lines) >= 2:
+        scores["structure"] = 7.0
+    else:
+        scores["structure"] = 3.0
+
+    # 4. Hook — first line length and impact
+    first_line = lines[0] if lines else ""
+    if len(first_line) >= 20:
+        scores["hook"] = 8.0
+    elif len(first_line) >= 10:
+        scores["hook"] = 5.0
+    else:
+        scores["hook"] = 2.0
+
+    # 5. Originality — similarity to recent posts
+    recent = _collect_recent_texts()
+    max_sim = _max_similarity(text, recent)
+    scores["originality"] = max(0.0, 10.0 * (1.0 - max_sim))
+
+    # Weighted overall
+    weights = {
+        "char_count": 0.15,
+        "hashtags": 0.10,
+        "structure": 0.10,
+        "hook": 0.15,
+        "originality": 0.50,
+    }
+    overall = round(sum(scores[k] * weights[k] for k in weights), 1)
+
+    # Gate decision
+    if max_sim >= _SIMILARITY_THRESHOLD:
+        gate = "rejected"
+        gate_reason = f"過去投稿と類似度 {max_sim:.0%} (閾値 {_SIMILARITY_THRESHOLD:.0%})"
+    elif overall < _SCORE_AUTO_REJECT:
+        gate = "rejected"
+        gate_reason = f"品質スコア {overall} < {_SCORE_AUTO_REJECT} (自動棄却ライン)"
+    elif overall >= _SCORE_AUTO_APPROVE:
+        gate = "auto_approved"
+        gate_reason = f"品質スコア {overall} ≧ {_SCORE_AUTO_APPROVE} (自動承認ライン)"
+    else:
+        gate = "pending"
+        gate_reason = f"品質スコア {overall} — 人間レビュー待ち"
+
+    return {
+        "scores": scores,
+        "overall": overall,
+        "max_similarity": round(max_sim, 3),
+        "gate": gate,
+        "gate_reason": gate_reason,
+    }
+
+
+# ── Save pending post ─────────────────────────────────────────
 
 
 def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
     """Save a tweet draft for human approval.
 
     Creates a JSON file in ~/.animaworks/pending_posts/.
+    Runs quality scoring — auto-rejects low-quality posts and
+    auto-approves high-quality posts.
 
     Args:
         text: Tweet text.
@@ -305,15 +480,38 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
         anima: Name of the anima saving the draft.
 
     Returns:
-        Dict with draft id and file path.
+        Dict with draft id, score, and gate decision.
     """
     _ensure_pending_dir()
     text = _strip_markdown(text)
+
+    # Score before saving
+    scoring = _score_post(text)
+    gate = scoring["gate"]
+
     jst = timezone(timedelta(hours=9))
     now = datetime.now(jst)
     ts = now.strftime("%Y%m%dT%H%M%S")
     draft_id = f"{ts}_{slot}"
     filename = f"{draft_id}.json"
+
+    # Auto-reject: don't save the file, return immediately
+    if gate == "rejected":
+        logger.info(
+            "Post rejected (score=%.1f sim=%.3f): %s",
+            scoring["overall"], scoring["max_similarity"], draft_id,
+        )
+        return {
+            "success": False,
+            "id": draft_id,
+            "rejected": True,
+            "quality_score": scoring["overall"],
+            "gate_reason": scoring["gate_reason"],
+            "scores": scoring["scores"],
+            "message": f"投稿は品質スコアにより棄却されました: {scoring['gate_reason']}",
+        }
+
+    status = "approved" if gate == "auto_approved" else "pending"
 
     draft = {
         "id": draft_id,
@@ -321,18 +519,47 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
         "slot": slot,
         "anima": anima,
         "created_at": now.isoformat(),
-        "status": "pending",
+        "status": status,
         "char_count": len(text),
+        "quality_score": scoring["overall"],
+        "quality_scores": scoring["scores"],
+        "max_similarity": scoring["max_similarity"],
+        "gate": gate,
+        "gate_reason": scoring["gate_reason"],
     }
 
     filepath = PENDING_DIR / filename
     filepath.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("Pending post saved: %s (%d chars)", draft_id, len(text))
 
-    # Send Telegram notification for approval
-    _notify_pending_post(draft_id, text, slot, anima)
+    if gate == "auto_approved":
+        logger.info(
+            "Post auto-approved (score=%.1f): %s (%d chars)",
+            scoring["overall"], draft_id, len(text),
+        )
+    else:
+        logger.info(
+            "Pending post saved (score=%.1f): %s (%d chars)",
+            scoring["overall"], draft_id, len(text),
+        )
 
-    return {"success": True, "id": draft_id, "path": str(filepath), "message": "Draft saved for approval"}
+    # Send Telegram notification for approval (skip for auto-approved)
+    if status == "pending":
+        _notify_pending_post(draft_id, text, slot, anima, scoring)
+    else:
+        _notify_pending_post(draft_id, text, slot, anima, scoring, auto_approved=True)
+
+    status_label = "自動承認" if gate == "auto_approved" else "承認待ち"
+    return {
+        "success": True,
+        "id": draft_id,
+        "path": str(filepath),
+        "status": status,
+        "quality_score": scoring["overall"],
+        "gate": gate,
+        "gate_reason": scoring["gate_reason"],
+        "scores": scoring["scores"],
+        "message": f"Draft saved ({status_label}, score={scoring['overall']})",
+    }
 
 
 def execute_pending_posts(slot: str) -> dict:
