@@ -562,14 +562,16 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
     }
 
 
-def execute_pending_posts(slot: str) -> dict:
+def execute_pending_posts(slot: str, anima_dir: str = "") -> dict:
     """Execute approved pending posts for a given slot.
 
     Finds all approved posts matching the slot, posts them via X API,
-    and deletes the files on success.
+    and deletes the files on success.  If *anima_dir* is provided the
+    tweet_id is written back to ``knowledge/x_post_log.md``.
 
     Args:
         slot: Time slot to process (e.g. 'morning', 'evening').
+        anima_dir: Path to the executing anima's data directory.
 
     Returns:
         Dict with results.
@@ -592,6 +594,11 @@ def execute_pending_posts(slot: str) -> dict:
             result = client.post_tweet(text=draft["text"])
             tweet_id = result.get("data", {}).get("id", "")
             logger.info("Pending post executed: %s → tweet %s", draft["id"], tweet_id)
+
+            # Write tweet_id back to x_post_log.md
+            if anima_dir and tweet_id:
+                _update_log_tweet_id(Path(anima_dir), tweet_id)
+
             filepath.unlink()  # Delete on success
             posted.append({
                 "id": draft["id"],
@@ -609,6 +616,106 @@ def execute_pending_posts(slot: str) -> dict:
         "posted_count": len(posted),
         "errors": errors,
         "message": f"{len(posted)} post(s) executed for slot '{slot}'" if posted else f"No approved posts for slot '{slot}'",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Engagement feedback helpers
+# ---------------------------------------------------------------------------
+
+def _update_log_tweet_id(anima_dir: Path, tweet_id: str) -> None:
+    """Replace the first ``pending`` cell in x_post_log.md with *tweet_id*."""
+    log_path = anima_dir / "knowledge" / "x_post_log.md"
+    if not log_path.exists():
+        return
+    try:
+        text = log_path.read_text(encoding="utf-8")
+        # Replace exactly one occurrence of "| pending |" with the real tweet_id
+        updated = text.replace("| pending |", f"| {tweet_id} |", 1)
+        if updated != text:
+            log_path.write_text(updated, encoding="utf-8")
+            logger.info("x_post_log.md: pending → %s", tweet_id)
+    except OSError:
+        logger.warning("Failed to update x_post_log.md with tweet_id", exc_info=True)
+
+
+def update_engagement(anima_dir: str) -> dict[str, Any]:
+    """Fetch engagement metrics for recent tweets and update x_post_log.md.
+
+    Reads the markdown table, finds rows where tweet_id is numeric and
+    any metric column is ``-``, queries the X API, and writes back.
+
+    Args:
+        anima_dir: Path to the anima data directory (auto-injected).
+
+    Returns:
+        Dict with success status and update count.
+    """
+    if not anima_dir:
+        return {"success": False, "error": "anima_dir not set"}
+
+    log_path = Path(anima_dir) / "knowledge" / "x_post_log.md"
+    if not log_path.exists():
+        return {"success": False, "error": "x_post_log.md not found"}
+
+    try:
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        return {"success": False, "error": str(e)}
+
+    # Find rows with numeric tweet_id and at least one "-" metric
+    ids_to_fetch: list[str] = []
+    row_indices: dict[str, int] = {}  # tweet_id → line index
+
+    for i, line in enumerate(lines):
+        if not line.startswith("|"):
+            continue
+        cols = [c.strip() for c in line.split("|")]
+        # Expected: ['', '日付', 'トピック要約', 'tweet_id', 'likes', 'RTs', 'impressions', '']
+        if len(cols) < 8:
+            continue
+        tid = cols[3]
+        if not tid.isdigit():
+            continue
+        # Check if any metric is still "-"
+        if "-" in (cols[4], cols[5], cols[6]):
+            ids_to_fetch.append(tid)
+            row_indices[tid] = i
+
+    if not ids_to_fetch:
+        return {"success": True, "updated": 0, "message": "All metrics up to date"}
+
+    # Fetch metrics from X API
+    try:
+        from core.tools.x_search import XSearchClient
+        client = XSearchClient()
+        metrics = client.get_tweet_metrics(ids_to_fetch)
+    except Exception as e:
+        logger.warning("Failed to fetch tweet metrics: %s", e)
+        return {"success": False, "error": f"API error: {e}", "tweet_ids": ids_to_fetch}
+
+    # Update rows
+    updated_count = 0
+    for tid, m in metrics.items():
+        idx = row_indices.get(tid)
+        if idx is None:
+            continue
+        cols = [c.strip() for c in lines[idx].split("|")]
+        cols[4] = str(m.get("likes", 0))
+        cols[5] = str(m.get("retweets", 0))
+        cols[6] = str(m.get("impressions", 0))
+        lines[idx] = "| " + " | ".join(cols[1:-1]) + " |"
+        updated_count += 1
+
+    if updated_count:
+        log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        logger.info("x_post_log.md: updated engagement for %d tweets", updated_count)
+
+    return {
+        "success": True,
+        "updated": updated_count,
+        "tweet_ids": list(metrics.keys()),
+        "message": f"Engagement updated for {updated_count} tweet(s)",
     }
 
 
@@ -700,6 +807,17 @@ def get_tool_schemas() -> list[dict]:
                 "required": ["slot"],
             },
         },
+        {
+            "name": "x_post_update_engagement",
+            "description": (
+                "Fetch engagement metrics (likes, RTs, impressions) for recent tweets "
+                "and update knowledge/x_post_log.md. Cron-only."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+            },
+        },
     ]
 
 
@@ -718,7 +836,12 @@ def dispatch(name: str, args: dict[str, Any]) -> Any:
         )
 
     if name == "x_post_execute_pending":
-        return execute_pending_posts(slot=args["slot"])
+        anima_dir = args.get("anima_dir", "")
+        return execute_pending_posts(slot=args["slot"], anima_dir=anima_dir)
+
+    if name == "x_post_update_engagement":
+        anima_dir = args.get("anima_dir", "")
+        return update_engagement(anima_dir=anima_dir)
 
     client = XPostClient()
 

@@ -27,6 +27,9 @@ logger = logging.getLogger("animaworks.anima")
 class LifecycleMixin:
     """Mixin: heartbeat orchestration, memory consolidation, cron task execution."""
 
+    # Cooldown after inbox processing: don't idle while waiting for replies.
+    _INBOX_COOLDOWN_SECONDS = 30 * 60  # 30 minutes
+
     def _is_heartbeat_idle(self) -> bool:
         """Return True when there is nothing actionable to process this heartbeat.
 
@@ -35,6 +38,7 @@ class LifecycleMixin:
           2. Recovery note from a previous crash
           3. Background task notifications pending
           4. Active (pending/in_progress) tasks in the queue
+          5. Recent inbox activity (cooldown after last processed message)
 
         If any condition is true the heartbeat should NOT be skipped.
         """
@@ -59,6 +63,30 @@ class LifecycleMixin:
             if active:
                 return False
         except (OSError, KeyError, AttributeError):
+            pass
+
+        # 5. Open outbox tickets: waiting for another Anima to pick up or reply
+        try:
+            from core.supervisor.ticket_manager import TicketManager
+            outbox_root = self.messenger.shared_dir / "outbox"
+            if TicketManager.has_open_tickets(outbox_root, self.name):
+                return False
+        except (ImportError, OSError):
+            pass
+
+        # 6. Inbox cooldown: if we processed messages recently, stay active
+        #    to catch follow-up replies (e.g. delegation → response cycle).
+        try:
+            import time
+            processed_dir = self.messenger.inbox_dir / "processed"
+            if processed_dir.exists():
+                latest_mtime = max(
+                    (f.stat().st_mtime for f in processed_dir.glob("*.json")),
+                    default=0,
+                )
+                if latest_mtime and (time.time() - latest_mtime) < self._INBOX_COOLDOWN_SECONDS:
+                    return False
+        except (OSError, ValueError):
             pass
 
         return True

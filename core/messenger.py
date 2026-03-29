@@ -127,6 +127,37 @@ class Messenger:
 
         logger.info("Message sent: %s -> %s (%s)", self.anima_name, to, msg.id)
 
+        # Outbox ticket: track delivery and response for internal Anima messages
+        if msg_type not in ("ack", "error", "system_alert") and intent in ("delegation", "question", "report"):
+            try:
+                from core.supervisor.ticket_manager import TicketManager
+                outbox_root = self.shared_dir / "outbox"
+                TicketManager.create_ticket(
+                    outbox_root=outbox_root,
+                    from_anima=self.anima_name,
+                    to_anima=to,
+                    message_id=msg.id,
+                    intent=intent,
+                    content_preview=content[:200],
+                )
+            except Exception:
+                logger.debug("Outbox ticket creation failed (non-critical)", exc_info=True)
+
+        # Resolve ticket: if this is a reply, mark the original sender's ticket as resolved
+        if reply_to:
+            try:
+                from core.supervisor.ticket_manager import TicketManager
+                outbox_root = self.shared_dir / "outbox"
+                # The original message was sent by "to" (the person we're replying to),
+                # so the ticket is in their outbox.
+                TicketManager.resolve_ticket(
+                    outbox_root=outbox_root,
+                    from_anima=to,
+                    message_id=reply_to,
+                )
+            except Exception:
+                pass  # Non-critical
+
         # Activity Log: record message_sent for all send paths (S/A/B/CLI)
         if not skip_logging:
             try:
@@ -344,12 +375,28 @@ class Messenger:
         Unlike receive(), the caller is responsible for archiving
         via archive_paths() after processing.  Messages that arrive
         while the caller is working will remain in the inbox.
+
+        Also acknowledges outbox tickets for each message, so the
+        sender knows the message was picked up.
         """
         items: list[InboxItem] = []
         for f in sorted(self.inbox_dir.glob("*.json")):
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))
-                items.append(InboxItem(msg=Message(**data), path=f))
+                msg = Message(**data)
+                items.append(InboxItem(msg=msg, path=f))
+
+                # Resolve the sender's outbox ticket (picked_up = resolved)
+                try:
+                    from core.supervisor.ticket_manager import TicketManager
+                    outbox_root = self.shared_dir / "outbox"
+                    TicketManager.resolve_ticket(
+                        outbox_root=outbox_root,
+                        from_anima=msg.from_person,
+                        message_id=msg.id,
+                    )
+                except Exception:
+                    pass  # Non-critical
             except Exception:
                 logger.warning("Failed to read inbox file: %s", f, exc_info=True)
         return items

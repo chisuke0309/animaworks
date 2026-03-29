@@ -161,6 +161,18 @@ async def _startup_animas_background(app: FastAPI) -> None:
             logger.exception("Telegram poller startup failed")
             app.state.telegram_poller = None
 
+        # ── Ticket Manager ────────────────────────────────────
+        try:
+            from core.supervisor.ticket_manager import TicketManager
+            from core.paths import get_data_dir as _gdd
+
+            ticket_manager = TicketManager(_gdd() / "shared")
+            await ticket_manager.start()
+            app.state.ticket_manager = ticket_manager
+        except Exception:
+            logger.exception("Ticket manager startup failed")
+            app.state.ticket_manager = None
+
         logger.info("All anima processes started")
 
     except asyncio.CancelledError:
@@ -258,6 +270,8 @@ async def lifespan(app: FastAPI):
             await app.state.slack_socket_manager.stop()
         if getattr(app.state, "telegram_poller", None):
             await app.state.telegram_poller.stop()
+        if getattr(app.state, "ticket_manager", None):
+            await app.state.ticket_manager.stop()
         await app.state.supervisor.shutdown_all()
         if hasattr(app.state, "msg_log_scheduler"):
             app.state.msg_log_scheduler.shutdown(wait=False)

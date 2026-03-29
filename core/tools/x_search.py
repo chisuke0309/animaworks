@@ -196,6 +196,34 @@ class XSearchClient:
 
         return all_tweets[:max_results]
 
+    def get_tweet_metrics(self, tweet_ids: list[str]) -> dict[str, dict[str, int]]:
+        """Fetch public metrics for a list of tweet IDs.
+
+        Args:
+            tweet_ids: Up to 100 tweet ID strings.
+
+        Returns:
+            Mapping of tweet_id → {likes, retweets, replies, impressions}.
+            Missing or inaccessible tweets are silently omitted.
+        """
+        if not tweet_ids:
+            return {}
+        ids_csv = ",".join(tweet_ids[:100])
+        result = self._request("tweets", {
+            "ids": ids_csv,
+            "tweet.fields": "public_metrics",
+        })
+        metrics: dict[str, dict[str, int]] = {}
+        for tweet in result.get("data", []):
+            pm = tweet.get("public_metrics", {})
+            metrics[tweet["id"]] = {
+                "likes": pm.get("like_count", 0),
+                "retweets": pm.get("retweet_count", 0),
+                "replies": pm.get("reply_count", 0),
+                "impressions": pm.get("impression_count", 0),
+            }
+        return metrics
+
 
 # ---------------------------------------------------------------------------
 # Text formatting
