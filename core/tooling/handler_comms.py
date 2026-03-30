@@ -85,6 +85,33 @@ class CommsToolsMixin:
         if len(current_replied) >= 2 and to not in current_replied:
             return t("handler.dm_max_recipients")
 
+        # ── Cross-session dedup (prevents heartbeat re-sending what inbox already sent) ──
+        try:
+            _recent_sends = self._activity.recent(
+                days=1, limit=20, types=["message_sent"],
+            )
+            from core.time_utils import now_jst as _now_jst
+            from datetime import timedelta as _td
+            _cutoff = _now_jst() - _td(minutes=30)
+            for _entry in _recent_sends:
+                _meta = _entry.meta or {}
+                if (
+                    _meta.get("to") == to
+                    and _meta.get("intent") == intent
+                    and _entry.ts >= _cutoff.isoformat()
+                ):
+                    logger.info(
+                        "Cross-session dedup: blocking send_message %s->%s "
+                        "(intent=%s, already sent at %s)",
+                        self._anima_name, to, intent, _entry.ts,
+                    )
+                    return (
+                        f"Error: 過去30分以内に同じ相手({to})に同じ intent({intent})の"
+                        f"メッセージを送信済みです。重複送信を防止しました。"
+                    )
+        except Exception:
+            logger.debug("Cross-session dedup check failed", exc_info=True)
+
         # ── Resolve recipient ──
         try:
             from core.outbound import resolve_recipient, send_external

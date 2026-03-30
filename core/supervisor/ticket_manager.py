@@ -27,7 +27,7 @@ logger = logging.getLogger("animaworks.ticket_manager")
 
 # ── Constants ─────────────────────────────────────────────
 _POLL_INTERVAL_SEC = 30       # How often to check outboxes
-_PICKUP_TIMEOUT_SEC = 5 * 60  # 5 min: alert if message not picked up
+_PICKUP_TIMEOUT_SEC = 10 * 60  # 10 min: alert if message not picked up
 
 # Ticket statuses
 STATUS_PENDING = "pending"       # Message placed in outbox, awaiting pickup

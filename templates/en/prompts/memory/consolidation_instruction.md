@@ -66,3 +66,15 @@ If relevant files are found, use `read_memory_file` to review their content.
   ---
   ```
 - After completion, output a summary of what was done
+
+## ⚠️ Strictly Forbidden
+
+This task is **for memory organization only**. Never do any of the following:
+
+- Execute posting tools such as `x_post_execute_pending` or `x_post`
+- Operate on the pending_posts directory (including deletion or moving files)
+- Send notifications via `call_human`
+- Send DMs to team members via `send_message`
+- Start new tasks or delegations
+
+If you find files in pending_posts, **leave them untouched**. Post execution is handled by the dedicated cron at 08:00/17:00.

@@ -485,6 +485,35 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
     _ensure_pending_dir()
     text = _strip_markdown(text)
 
+    # ── Dedup: check if identical or near-identical content already exists ──
+    try:
+        for _existing_file in PENDING_DIR.glob("*.json"):
+            _existing = json.loads(_existing_file.read_text(encoding="utf-8"))
+            _existing_text = _existing.get("text", "")
+            # If text is identical (or first 200 chars match), block duplicate save
+            if (
+                _existing_text == text
+                or (len(text) > 200 and _existing_text[:200] == text[:200])
+            ) and _existing.get("slot") == slot:
+                logger.info(
+                    "Duplicate save_pending blocked: slot=%s existing=%s",
+                    slot, _existing_file.name,
+                )
+                return {
+                    "success": False,
+                    "id": _existing.get("id", "?"),
+                    "rejected": True,
+                    "quality_score": _existing.get("quality_score", 0),
+                    "gate_reason": "duplicate_content",
+                    "scores": _existing.get("quality_scores", {}),
+                    "message": (
+                        f"同じ内容の投稿が既に保存済みです (id={_existing.get('id','?')})。"
+                        f"重複保存を防止しました。"
+                    ),
+                }
+    except Exception:
+        logger.debug("Dedup check failed, proceeding with save", exc_info=True)
+
     # Score before saving
     scoring = _score_post(text)
     gate = scoring["gate"]

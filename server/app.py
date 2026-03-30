@@ -146,6 +146,9 @@ async def _startup_animas_background(app: FastAPI) -> None:
             socket_manager = SlackSocketModeManager()
             await socket_manager.start()
             app.state.slack_socket_manager = socket_manager
+        except ImportError:
+            logger.info("Slack Socket Mode skipped (slack_bolt not installed)")
+            app.state.slack_socket_manager = None
         except Exception:
             logger.exception("Slack Socket Mode startup failed")
             app.state.slack_socket_manager = None

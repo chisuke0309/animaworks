@@ -341,14 +341,39 @@ class HeartbeatMixin:
         except Exception:
             logger.debug("[%s] Failed to write heartbeat checkpoint", self.name, exc_info=True)
 
-        # Reset ALL reply/channel tracking before the cycle (not just "background")
-        # so stale state from prior heartbeat/inbox runs can't block new sends.
+        # Reset in-memory reply/channel tracking, then reload recent sends
+        # from activity_log so heartbeat won't duplicate what inbox already sent.
         self.agent.reset_reply_tracking()
         self.agent.reset_posted_channels()
-        # Clear replied_to persistence file
         _replied_to_path = self.anima_dir / "run" / "replied_to.jsonl"
         if _replied_to_path.exists():
             _replied_to_path.unlink(missing_ok=True)
+        # Merge recent message_sent recipients (last 30 min) so per-run
+        # dedup guard also blocks duplicates across inbox→heartbeat boundary.
+        try:
+            from datetime import timedelta as _td
+            _cutoff = now_jst() - _td(minutes=30)
+            _recent = self._activity.recent(
+                days=1, limit=20, types=["message_sent"],
+            )
+            _recent_to: set[str] = set()
+            for _e in _recent:
+                if _e.ts >= _cutoff.isoformat():
+                    _m = _e.meta or {}
+                    if _m.get("to"):
+                        _recent_to.add(_m["to"])
+            if _recent_to:
+                self.agent._tool_handler.merge_replied_to(
+                    _recent_to, session_type="heartbeat",
+                )
+                logger.debug(
+                    "[%s] Heartbeat pre-loaded replied_to from activity: %s",
+                    self.name, _recent_to,
+                )
+        except Exception:
+            logger.debug(
+                "[%s] Failed to pre-load replied_to", self.name, exc_info=True,
+            )
 
         accumulated_text = ""
         result: CycleResult | None = None
