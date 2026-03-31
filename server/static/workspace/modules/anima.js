@@ -3,7 +3,7 @@
 
 import { getState, setState } from "./state.js";
 import { t } from "/shared/i18n.js";
-import { fetchAnimas, fetchAnimaDetail } from "./api.js";
+import { fetchAnimas, fetchAnimaDetail, updateAnimaConfig } from "./api.js";
 import { escapeHtml, renderSimpleMarkdown } from "./utils.js";
 
 // ── Private State ──────────────────────
@@ -37,12 +37,22 @@ function statusLabel(status) {
 /**
  * Map a full model name to a short display alias.
  */
+/**
+ * Available models for the model selector dropdown.
+ */
+const AVAILABLE_MODELS = [
+  { value: "claude-opus-4-6", label: "Opus 4.6" },
+  { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+  { value: "claude-haiku-4-5", label: "Haiku 4.5" },
+  { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (Oct)" },
+];
+
 function modelAlias(model) {
   if (!model) return "";
   const m = model.toLowerCase();
   // S: Claude models
-  if (m.includes("haiku")) return "Haiku";
-  if (m.includes("haiku")) return "Haiku";
+  if (m.includes("opus")) return "Opus";
+  if (m.includes("sonnet")) return "Sonnet";
   if (m.includes("haiku")) return "Haiku";
   // A: OpenAI
   if (m.includes("gpt-4o")) return "GPT-4o";
@@ -184,17 +194,51 @@ function renderStatusPanel() {
     sectionsHtml = `<div class="loading-placeholder">${t("ws.no_detail")}</div>`;
   }
 
+  // Build model selector dropdown
+  const currentModel = animaEntry?.model || "";
+  const modelOptions = AVAILABLE_MODELS.map((m) => {
+    const selected = m.value === currentModel || currentModel.startsWith(m.value) ? "selected" : "";
+    return `<option value="${m.value}" ${selected}>${m.label}</option>`;
+  }).join("");
+  // Add current model if not in the list
+  const isKnown = AVAILABLE_MODELS.some((m) => currentModel === m.value || currentModel.startsWith(m.value));
+  const extraOption = !isKnown && currentModel
+    ? `<option value="${escapeHtml(currentModel)}" selected>${escapeHtml(currentModel)}</option>`
+    : "";
+
   _statusContainer.innerHTML = `
     <div class="anima-status-panel">
       <div class="status-header">
         <span class="status-dot ${dotClass}"></span>
         <span class="status-anima-name">${escapeHtml(selectedAnima)}</span>
         <span class="status-label">${escapeHtml(statusLabel(statusStr))}</span>
-        ${alias ? `<span class="status-model">${escapeHtml(alias)}</span>` : ""}
+        <select class="status-model-select" data-anima="${escapeHtml(selectedAnima)}">
+          ${extraOption}${modelOptions}
+        </select>
       </div>
       ${sectionsHtml}
     </div>
   `;
+
+  // Attach model change handler
+  const modelSelect = _statusContainer.querySelector(".status-model-select");
+  if (modelSelect) {
+    modelSelect.addEventListener("change", async (e) => {
+      const newModel = e.target.value;
+      const animaName = e.target.dataset.anima;
+      try {
+        modelSelect.disabled = true;
+        await updateAnimaConfig(animaName, { model: newModel });
+        // Refresh animas list to reflect the change
+        const updatedAnimas = await fetchAnimas();
+        setState({ animas: updatedAnimas });
+        renderStatusPanel();
+      } catch (err) {
+        alert(`Model update failed: ${err.message}`);
+        modelSelect.disabled = false;
+      }
+    });
+  }
 }
 
 function truncate(str, maxLen) {

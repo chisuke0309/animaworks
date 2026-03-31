@@ -6,7 +6,9 @@
       "Read(//Users/chisuke/.claude/skills/agent-reach/**)"
     ],
     "additionalDirectories": [
-      "/Users/chisuke/.animaworks/animas/rue"
+      "/Users/chisuke/.animaworks/animas/rue",
+      "/Users/chisuke/.animaworks",
+      "/Users/chisuke/trinitydox-standards/skills/animaworks-promo"
     ]
   }
 }

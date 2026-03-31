@@ -130,6 +130,14 @@ export function triggerHeartbeat(name) {
   return post(`/api/animas/${encodeURIComponent(name)}/trigger`, {});
 }
 
+export function updateAnimaConfig(name, updates) {
+  return request(`/api/animas/${encodeURIComponent(name)}/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+}
+
 // ── Assets ──────────────────────
 
 export function assetUrl(name, filename) {

@@ -243,13 +243,33 @@ async function _showDetail(name) {
       </div>
     `;
 
-    // Model config
-    if (animaConfig) {
+    // Model config — editable dropdown
+    {
+      const MODELS = [
+        { value: "claude-opus-4-6", label: "Claude Opus 4.6" },
+        { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+        { value: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
+        { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (Oct)" },
+      ];
+      const currentModel = animaConfig?.model || detail?.status?.model || "";
+      const options = MODELS.map((m) => {
+        const sel = (m.value === currentModel || currentModel.startsWith(m.value)) ? "selected" : "";
+        return `<option value="${m.value}" ${sel}>${m.label}</option>`;
+      }).join("");
+      const isKnown = MODELS.some((m) => currentModel === m.value || currentModel.startsWith(m.value));
+      const extra = !isKnown && currentModel
+        ? `<option value="${escapeHtml(currentModel)}" selected>${escapeHtml(currentModel)}</option>`
+        : "";
+
       html += `
         <div class="card" style="margin-bottom: 1.5rem;">
           <div class="card-header">${t("animas.model_config")}</div>
-          <div class="card-body">
-            <pre style="white-space:pre-wrap; margin:0;">${escapeHtml(JSON.stringify(animaConfig, null, 2))}</pre>
+          <div class="card-body" style="display:flex; align-items:center; gap:1rem;">
+            <label style="font-weight:600; white-space:nowrap;">Model:</label>
+            <select id="animaModelSelect" style="flex:1; padding:0.4rem 0.6rem; border:1px solid var(--border, #ddd); border-radius:6px; font-size:0.9rem;">
+              ${extra}${options}
+            </select>
+            <span id="animaModelStatus" style="font-size:0.8rem; color:var(--text-secondary, #666);"></span>
           </div>
         </div>
       `;
@@ -263,6 +283,27 @@ async function _showDetail(name) {
     `;
 
     content.innerHTML = html;
+
+    // Bind model selector
+    document.getElementById("animaModelSelect")?.addEventListener("change", async (e) => {
+      const select = e.target;
+      const statusEl = document.getElementById("animaModelStatus");
+      const newModel = select.value;
+      select.disabled = true;
+      if (statusEl) statusEl.textContent = "Updating...";
+      try {
+        await fetch(`/api/animas/${encodeURIComponent(name)}/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: newModel }),
+        });
+        if (statusEl) { statusEl.textContent = "✅ Updated"; statusEl.style.color = "#2a2"; }
+        setTimeout(() => { if (statusEl) statusEl.textContent = ""; select.disabled = false; }, 2000);
+      } catch (err) {
+        if (statusEl) { statusEl.textContent = "❌ Failed"; statusEl.style.color = "#c22"; }
+        setTimeout(() => { if (statusEl) statusEl.textContent = ""; select.disabled = false; }, 3000);
+      }
+    });
 
     // Bind trigger button
     document.getElementById("animaDetailTrigger")?.addEventListener("click", async (e) => {

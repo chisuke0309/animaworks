@@ -266,6 +266,25 @@ html, body {
   white-space: nowrap;
 }
 
+.status-model-select {
+  font-size: 0.7rem;
+  color: #6c6cff;
+  background: #eef;
+  border: 1px solid #cce;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: 4px;
+  cursor: pointer;
+  outline: none;
+}
+.status-model-select:hover {
+  border-color: #6c6cff;
+}
+.status-model-select:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 .status-section {
   background: #fafafa;
   border: 1px solid #eee;

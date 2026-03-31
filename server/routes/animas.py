@@ -365,6 +365,71 @@ def create_animas_router() -> APIRouter:
             logger.warning("Failed to interrupt %s: %s", name, e)
             raise HTTPException(status_code=500, detail=str(e))
 
+    # ── Update Config ─────────────────────────────────────
+
+    @router.put("/animas/{name}/config")
+    async def update_anima_config(name: str, request: Request):
+        """Update Anima config (model, etc.) via status.json and hot-reload."""
+        animas_dir = request.app.state.animas_dir
+        anima_dir = animas_dir / name
+        if not anima_dir.exists() or not (anima_dir / "identity.md").exists():
+            raise HTTPException(status_code=404, detail=f"Anima '{name}' not found")
+
+        body = await request.json()
+        allowed_fields = {"model", "supervisor", "speciality", "max_tokens", "max_turns", "thinking", "thinking_effort"}
+        updates = {k: v for k, v in body.items() if k in allowed_fields}
+        if not updates:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+
+        # Update status.json (SSoT)
+        status_file = anima_dir / "status.json"
+        existing = {}
+        if status_file.exists():
+            try:
+                existing = json.loads(status_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        existing.update(updates)
+        status_file.write_text(
+            json.dumps(existing, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+
+        # Also update config.json animas entry for consistency
+        try:
+            from core.paths import get_config_path
+            config_path = get_config_path()
+            if config_path.exists():
+                config_data = json.loads(config_path.read_text(encoding="utf-8"))
+                if "animas" not in config_data:
+                    config_data["animas"] = {}
+                if name not in config_data["animas"]:
+                    config_data["animas"][name] = {}
+                if "model" in updates:
+                    config_data["animas"][name]["model"] = updates["model"]
+                config_path.write_text(
+                    json.dumps(config_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+                )
+        except Exception:
+            logger.warning("Failed to sync config.json for %s (non-critical)", name)
+
+        # Hot-reload if process is running
+        supervisor = request.app.state.supervisor
+        reload_result = None
+        if name in supervisor.processes:
+            try:
+                reload_result = await supervisor.send_request(
+                    anima_name=name, method="reload_config", params={}, timeout=10.0,
+                )
+            except Exception as e:
+                logger.warning("Hot-reload failed for %s: %s", name, e)
+                reload_result = {"status": "reload_failed", "error": str(e)}
+
+        return {
+            "name": name,
+            "updated": updates,
+            "reload": reload_result,
+        }
+
     # ── Reload Config ─────────────────────────────────────
 
     @router.post("/animas/{name}/reload")
