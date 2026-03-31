@@ -16,6 +16,8 @@ const SHOW_TYPES = new Set([
 let _timer = null;
 let _lastRenderKey = "";
 let _eventsById = new Map();
+let _activeUnit = "all";   // "all" | "x" | "tiktok"
+let _unitMap = {};          // { animaName → "x" | "tiktok" }
 
 export function render(container) {
   _lastRenderKey = "";
@@ -28,6 +30,11 @@ export function render(container) {
           <span class="pipeline-live-dot"></span>LIVE
         </span>
         <span class="pipeline-updated" id="plUpdated">—</span>
+      </div>
+      <div class="page-tabs" id="plTabs">
+        <button class="page-tab active" data-unit="all">すべて</button>
+        <button class="page-tab" data-unit="x">X事業部</button>
+        <button class="page-tab" data-unit="tiktok">TikTok事業部</button>
       </div>
       <div class="pipeline-feed" id="plFeed">
         <div class="pipeline-empty">読み込み中...</div>
@@ -58,6 +65,15 @@ export function render(container) {
   closeBtn.addEventListener("click", closeDetail);
   document.addEventListener("keydown", function onKey(e) {
     if (e.key === "Escape") closeDetail();
+  });
+
+  container.querySelector("#plTabs").addEventListener("click", e => {
+    const btn = e.target.closest(".page-tab");
+    if (!btn) return;
+    _activeUnit = btn.dataset.unit;
+    container.querySelectorAll("#plTabs .page-tab").forEach(b => b.classList.toggle("active", b === btn));
+    _lastRenderKey = "";  // force re-render
+    _poll(container);     // 即座に再描画
   });
 
   container.querySelector("#plFeed").addEventListener("click", e => {
@@ -91,19 +107,26 @@ async function _poll(container) {
     const feed = container.querySelector("#plFeed");
     if (!feed) return;
 
+    // Build unit map from animas supervisor field
+    _unitMap = _buildUnitMap(animas || []);
+
     const raw = (data.events || []).filter(e => SHOW_TYPES.has(e.type));
     const events = _deduplicate(raw).sort((a, b) => a.ts.localeCompare(b.ts));
     events.forEach(ev => _eventsById.set(ev.id, ev));
-    const jobs = _groupIntoJobs(events); // filter はgroupIntoJobs内で実施済み
+    const allJobs = _groupIntoJobs(events);
+    const jobs = _filterJobsByUnit(allJobs, _activeUnit);
 
-    const key = jobs.map(j => j.id + ":" + j.steps.length + ":" + j.status).join("|");
+    const key = _activeUnit + "|" + jobs.map(j => j.id + ":" + j.steps.length + ":" + j.status).join("|");
     if (key !== _lastRenderKey) {
       _lastRenderKey = key;
       _renderFeed(feed, jobs);
     }
 
     const statusBar = container.querySelector("#plStatusBar");
-    _updateStatusBar(statusBar, animas || []);
+    const filteredAnimas = _activeUnit === "all"
+      ? (animas || [])
+      : (animas || []).filter(a => _unitMap[a.name] === _activeUnit);
+    _updateStatusBar(statusBar, filteredAnimas);
 
     const updated = container.querySelector("#plUpdated");
     if (updated) {
@@ -349,6 +372,32 @@ function _showDetail(container, ev) {
   overlay.hidden = false;
   panel.hidden = false;
   requestAnimationFrame(() => panel.classList.add("pl-detail-open"));
+}
+
+// ── Unit mapping & filtering ──────────────────
+
+function _buildUnitMap(animas) {
+  // Step 1: find leaders (supervisor=null)
+  const leaders = animas.filter(a => !a.supervisor).map(a => a.name);
+  // Step 2: map each anima to its leader's unit
+  const map = {};
+  for (const a of animas) {
+    const leader = a.supervisor || a.name;
+    // Determine unit name from leader
+    // cicchi → "x", maru → "tiktok", others → leader name
+    const unit = leader === "cicchi" ? "x" : leader === "maru" ? "tiktok" : leader;
+    map[a.name] = unit;
+  }
+  return map;
+}
+
+function _filterJobsByUnit(jobs, unit) {
+  if (unit === "all") return jobs;
+  return jobs.filter(j => {
+    // トリガーのanimaで判定。なければ最初のステップのanima
+    const anima = j.trigger?.anima || j.steps[0]?.anima || "";
+    return _unitMap[anima] === unit;
+  });
 }
 
 function _updateStatusBar(el, animas) {

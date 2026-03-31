@@ -46,6 +46,7 @@ class NotificationChannel(ABC):
         priority: str = "normal",
         *,
         anima_name: str = "",
+        attachments: list[str] | None = None,
     ) -> str:
         """Send a notification. Returns a status message."""
 
@@ -117,8 +118,13 @@ class HumanNotifier:
         priority: str = "normal",
         *,
         anima_name: str = "",
+        attachments: list[str] | None = None,
     ) -> list[str]:
         """Send notification to all channels in parallel.
+
+        When anima_name is provided and a channel has a ``target_anima``
+        config key, only channels matching that anima are used.  Channels
+        without ``target_anima`` are always included (broadcast).
 
         Returns a list of status messages (one per channel).
         Failed channels return error strings instead of raising.
@@ -129,16 +135,28 @@ class HumanNotifier:
         if priority not in PRIORITY_LEVELS:
             priority = "normal"
 
+        # Filter channels: if channel has target_anima, only send if it matches
+        active_channels = []
+        for ch in self._channels:
+            target = ch._config.get("target_anima", "")
+            if target and anima_name and target != anima_name:
+                continue  # skip channels bound to a different anima
+            active_channels.append(ch)
+
+        if not active_channels:
+            # Fallback: if no channels match, use all channels
+            active_channels = self._channels
+
         results = await asyncio.gather(
             *[
-                ch.send(subject, body, priority, anima_name=anima_name)
-                for ch in self._channels
+                ch.send(subject, body, priority, anima_name=anima_name, attachments=attachments)
+                for ch in active_channels
             ],
             return_exceptions=True,
         )
 
         status: list[str] = []
-        for ch, result in zip(self._channels, results):
+        for ch, result in zip(active_channels, results):
             if isinstance(result, BaseException):
                 msg = f"{ch.channel_type}: ERROR - {result}"
                 logger.error("Notification failed for %s: %s", ch.channel_type, result)

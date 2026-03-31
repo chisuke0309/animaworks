@@ -404,6 +404,11 @@ NOTIFICATION_TOOLS: list[dict[str, Any]] = [
                     "enum": ["low", "normal", "high", "urgent"],
                     "description": "通知の優先度（デフォルト: normal）",
                 },
+                "attachments": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "添付する画像ファイルのパス一覧（Telegramに画像として送信される）",
+                },
             },
             "required": ["subject", "body"],
         },

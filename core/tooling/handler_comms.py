@@ -443,6 +443,7 @@ class CommsToolsMixin:
         subject = args.get("subject", "")
         body = args.get("body", "")
         priority = args.get("priority", "normal")
+        attachments = args.get("attachments", None)
 
         if not subject or not body:
             return _error_result(
@@ -454,6 +455,7 @@ class CommsToolsMixin:
             coro = self._human_notifier.notify(
                 subject, body, priority,
                 anima_name=self._anima_name,
+                attachments=attachments,
             )
             try:
                 loop = asyncio.get_running_loop()

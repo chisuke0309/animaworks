@@ -170,6 +170,11 @@ export async function initOrgDashboard(container, animas, { onNodeClick } = {}) 
           <button class="org-goals-close-btn" id="orgGoalsCloseBtn">✕ 閉じる</button>
         </div>
       </div>
+      <div class="org-goals-tabs" id="orgGoalsTabs">
+        <button class="org-goals-tab active" data-unit="all">すべて</button>
+        <button class="org-goals-tab" data-unit="x">X事業部</button>
+        <button class="org-goals-tab" data-unit="tiktok">TikTok事業部</button>
+      </div>
       <div class="org-goals-panel-body">
         <div id="orgGoalsContent" class="org-goals-content"></div>
         <textarea id="orgGoalsEditor" class="org-goals-editor hidden"></textarea>
@@ -217,12 +222,22 @@ export async function initOrgDashboard(container, animas, { onNodeClick } = {}) 
   document.getElementById("orgGoalsSaveBtn").addEventListener("click", saveGoals);
   document.getElementById("orgGoalsCancelBtn").addEventListener("click", cancelGoalsEdit);
 
+  // Goals tabs
+  document.getElementById("orgGoalsTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest(".org-goals-tab");
+    if (!btn) return;
+    _activeGoalsUnit = btn.dataset.unit;
+    document.querySelectorAll("#orgGoalsTabs .org-goals-tab").forEach(b => b.classList.toggle("active", b === btn));
+    renderGoalsView();
+  });
+
   logger.info("Org dashboard initialized", { animaCount: animas.length });
 }
 
 // ── Goals Panel ───────────────────────────
 
 let _goalsContent = "";
+let _activeGoalsUnit = "all";
 
 async function openGoalsPanel() {
   const panel = document.getElementById("orgGoalsPanel");
@@ -245,8 +260,21 @@ function closeGoalsPanel() {
   cancelGoalsEdit();
 }
 
+function _filterGoalsByUnit(md, unit) {
+  if (unit === "all") return md;
+  // Split by <!-- unit:xxx --> markers and keep matching section
+  const sections = md.split(/(?=<!-- unit:\w+ -->)/);
+  const filtered = sections.filter(s => {
+    const match = s.match(/<!-- unit:(\w+) -->/);
+    if (!match) return true; // keep header/preamble
+    return match[1] === unit;
+  });
+  return filtered.join("");
+}
+
 function renderGoalsView() {
-  document.getElementById("orgGoalsContent").innerHTML = simpleMarkdown(_goalsContent);
+  const filtered = _filterGoalsByUnit(_goalsContent, _activeGoalsUnit);
+  document.getElementById("orgGoalsContent").innerHTML = simpleMarkdown(filtered);
   document.getElementById("orgGoalsContent").classList.remove("hidden");
   document.getElementById("orgGoalsEditor").classList.add("hidden");
   document.getElementById("orgGoalsEditBtn").classList.remove("hidden");
