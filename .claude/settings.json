@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//Users/chisuke/.claude/skills/agent-reach/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/chisuke/.animaworks/animas/rue"
+    ]
+  }
+}
