@@ -8,6 +8,7 @@ from __future__ import annotations
 import json as _json
 import logging
 import re
+import time
 from typing import TYPE_CHECKING, Any
 
 from core.i18n import t
@@ -424,6 +425,24 @@ class CommsToolsMixin:
 
     # ── Human notification handler ────────────────────────────
 
+    # ── call_human dedup ────────────────────────────────────
+    # Prevents repeated Telegram deliveries when the LLM processes
+    # multiple inbox messages about the same completed task.
+    _CALL_HUMAN_COOLDOWN_SECS = 600  # 10 minutes
+    _call_human_recent: dict[str, float] = {}  # normalised_subject -> timestamp
+
+    @staticmethod
+    def _normalise_subject(subject: str) -> str:
+        """Extract a stable key from the subject for dedup.
+
+        Strips version suffixes (v2, v3), trailing whitespace, and
+        bracket-enclosed priority tags so that minor wording changes
+        in the same delivery are collapsed.
+        """
+        s = re.sub(r"\s*v\d+\s*", " ", subject)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
     def _handle_call_human(self, args: dict[str, Any]) -> str:
         if not self._human_notifier:
             return _error_result(
@@ -443,6 +462,21 @@ class CommsToolsMixin:
         subject = args.get("subject", "")
         body = args.get("body", "")
         priority = args.get("priority", "normal")
+
+        # ── Dedup: suppress duplicate deliveries within cooldown ──
+        norm_key = self._normalise_subject(subject)
+        now = time.monotonic()
+        last_sent = self._call_human_recent.get(norm_key)
+        if last_sent is not None and (now - last_sent) < self._CALL_HUMAN_COOLDOWN_SECS:
+            elapsed = int(now - last_sent)
+            logger.info(
+                "call_human dedup: suppressed '%s' (sent %ds ago, cooldown=%ds)",
+                norm_key[:60], elapsed, self._CALL_HUMAN_COOLDOWN_SECS,
+            )
+            return _json.dumps({
+                "status": "suppressed",
+                "reason": f"Same subject was sent {elapsed}s ago. Cooldown is {self._CALL_HUMAN_COOLDOWN_SECS}s.",
+            }, ensure_ascii=False)
         attachments = args.get("attachments", None)
 
         if not subject or not body:
@@ -470,6 +504,14 @@ class CommsToolsMixin:
                 results = asyncio.run(coro)
         except Exception as e:
             return _error_result("NotificationError", f"Failed to send notification: {e}")
+
+        # Record successful send for dedup
+        self._call_human_recent[norm_key] = time.monotonic()
+        # Prune old entries to prevent unbounded growth
+        cutoff = time.monotonic() - self._CALL_HUMAN_COOLDOWN_SECS * 2
+        self._call_human_recent = {
+            k: v for k, v in self._call_human_recent.items() if v > cutoff
+        }
 
         notif_data = {
             "anima": self._anima_name,

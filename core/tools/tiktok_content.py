@@ -57,9 +57,22 @@ def _validate_carousel(plan: dict) -> list[str]:
         if phrase in all_text:
             violations.append(f"禁止フレーズ検出: 「{phrase}」")
 
-    # Check line length
+    # Check line length and minimum text volume
+    MIN_LINES_PER_SLIDE = 3
+    MIN_CHARS_PER_SLIDE = 20
+    MAX_CHARS_PER_SLIDE = 30
     for i, text in enumerate(overlay_texts):
-        for line in text.split("\\n"):
+        lines = [l for l in text.split("\\n") if l.strip()]
+        # Minimum line count
+        if len(lines) < MIN_LINES_PER_SLIDE:
+            violations.append(f"スライド{i+1}: {len(lines)}行（最低{MIN_LINES_PER_SLIDE}行必須 — 2行以下は淡白すぎる）")
+        # Total character count per slide
+        total_chars = sum(len(l) for l in lines)
+        if total_chars < MIN_CHARS_PER_SLIDE:
+            violations.append(f"スライド{i+1}: 合計{total_chars}文字（最低{MIN_CHARS_PER_SLIDE}文字 — 情報不足）")
+        if total_chars > MAX_CHARS_PER_SLIDE:
+            violations.append(f"スライド{i+1}: 合計{total_chars}文字（上限{MAX_CHARS_PER_SLIDE}文字）")
+        for line in lines:
             # Count full-width chars as 1, half-width as 0.5
             char_count = sum(2 if ord(c) > 127 else 1 for c in line) / 2
             if char_count > MAX_CHARS_PER_LINE:

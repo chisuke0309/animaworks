@@ -446,6 +446,65 @@ class TaskQueueManager:
                     )
         return blocked
 
+    # Auto-resolve threshold: 24 hours
+    _AUTO_RESOLVE_THRESHOLD_SEC = 86400
+
+    def auto_resolve_old_tasks(
+        self,
+        threshold_sec: int | None = None,
+    ) -> list[TaskEntry]:
+        """Auto-complete tasks that have not been updated for 24+ hours.
+
+        Any task in a non-terminal status (pending, in_progress, blocked,
+        delegated) that has not been updated for *threshold_sec* seconds
+        is transitioned to ``done`` with an auto-generated summary.
+
+        This acts as a safety net to prevent unbounded task accumulation
+        when the LLM fails to explicitly close tasks.
+
+        Returns list of auto-completed :class:`TaskEntry` objects.
+        """
+        if threshold_sec is None:
+            threshold_sec = self._AUTO_RESOLVE_THRESHOLD_SEC
+        now = now_jst()
+        resolved: list[TaskEntry] = []
+        _terminal = ("done", "cancelled")
+        for task in self._load_all().values():
+            if task.status in _terminal:
+                continue
+            elapsed = _elapsed_seconds(task.updated_at, now)
+            if elapsed is not None and elapsed >= threshold_sec:
+                elapsed_h = int(elapsed / 3600)
+                updated = self.update_status(
+                    task.task_id,
+                    "done",
+                    summary=f"[自動完了] {elapsed_h}時間以上更新なし: {task.summary[:80]}",
+                )
+                if updated:
+                    resolved.append(updated)
+                    logger.info(
+                        "Auto-resolved old task: id=%s elapsed=%dh summary=%s",
+                        task.task_id, elapsed_h, task.summary[:50],
+                    )
+        return resolved
+
+    _COMPACT_THRESHOLD = 100
+
+    def maybe_compact(self) -> int:
+        """Compact the JSONL file if it exceeds the line threshold.
+
+        Returns the number of tasks removed, or 0 if no compaction needed.
+        """
+        if not self._queue_path.exists():
+            return 0
+        try:
+            line_count = sum(1 for _ in self._queue_path.open(encoding="utf-8"))
+        except Exception:
+            return 0
+        if line_count < self._COMPACT_THRESHOLD:
+            return 0
+        return self.compact()
+
     # ── Maintenance ────────────────────────────────────────────
 
     def compact(self) -> int:

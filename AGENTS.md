@@ -111,3 +111,17 @@ uv run pytest tests/ -v
 # CLI ヘルプ
 uv run python main.py --help
 ```
+
+---
+
+## スキル運用ルール（AnimaWorks固有）
+
+### プロジェクト固有スキル
+
+AnimaWorks固有の運用スキル（Claude Code / 人間向け）は `.agent/skills/` に配置する。
+**作業を始める前に `.agent/skills/animaworks-skills-index/` で関連スキルを確認すること。**
+
+### Anima用スキル（common_skills）
+
+全Animaが共有するスキルは `~/.animaworks/common_skills/` に配置する（テンプレート元: `templates/ja/common_skills/`）。
+**Anima個別の `skills/` ディレクトリにコピー配布しない。** 同じスキルの複数コピーは更新漏れの原因になる。

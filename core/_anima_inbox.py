@@ -204,7 +204,7 @@ class InboxMixin:
                         for _tid in _task_ids:
                             _task = _itq2.get_task_by_id(_tid)
                             if _task and _task.status == "pending":
-                                _itq2.update_task(_tid, "in_progress")
+                                _itq2.update_status(_tid, "in_progress")
                                 logger.info(
                                     "[%s] inbox: task %s -> in_progress",
                                     self.name, _tid[:8],

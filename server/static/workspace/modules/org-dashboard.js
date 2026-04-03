@@ -16,6 +16,9 @@ let _activityFeed = null;
 let _onNodeClick = null;
 const MAX_ACTIVITY_ITEMS = 50;
 
+let _unitDefs = {};   // units.json の units オブジェクト
+let _allAnimas = [];  // /api/animas の結果
+
 // ── Org Tree Builder ──────────────────────
 
 function buildOrgTree(animas) {
@@ -170,14 +173,11 @@ export async function initOrgDashboard(container, animas, { onNodeClick } = {}) 
           <button class="org-goals-close-btn" id="orgGoalsCloseBtn">✕ 閉じる</button>
         </div>
       </div>
-      <div class="org-goals-tabs" id="orgGoalsTabs">
-        <button class="org-goals-tab active" data-unit="all">すべて</button>
-        <button class="org-goals-tab" data-unit="x">X事業部</button>
-        <button class="org-goals-tab" data-unit="tiktok">TikTok事業部</button>
-      </div>
+      <div class="org-goals-tabs" id="orgGoalsTabs"></div>
       <div class="org-goals-panel-body">
         <div id="orgGoalsContent" class="org-goals-content"></div>
         <textarea id="orgGoalsEditor" class="org-goals-editor hidden"></textarea>
+        <div id="orgUnitsSection" class="org-units-section hidden"></div>
       </div>
     </div>
   `;
@@ -222,13 +222,19 @@ export async function initOrgDashboard(container, animas, { onNodeClick } = {}) 
   document.getElementById("orgGoalsSaveBtn").addEventListener("click", saveGoals);
   document.getElementById("orgGoalsCancelBtn").addEventListener("click", cancelGoalsEdit);
 
-  // Goals tabs
+  // Goals tabs (dynamic: unit tabs + manage tab)
   document.getElementById("orgGoalsTabs").addEventListener("click", (e) => {
     const btn = e.target.closest(".org-goals-tab");
     if (!btn) return;
-    _activeGoalsUnit = btn.dataset.unit;
+    const unit = btn.dataset.unit;
+    _activeGoalsUnit = unit;
     document.querySelectorAll("#orgGoalsTabs .org-goals-tab").forEach(b => b.classList.toggle("active", b === btn));
-    renderGoalsView();
+    if (unit === "_manage") {
+      _showUnitsManagement();
+    } else {
+      _hideUnitsManagement();
+      renderGoalsView();
+    }
   });
 
   logger.info("Org dashboard initialized", { animaCount: animas.length });
@@ -245,13 +251,33 @@ async function openGoalsPanel() {
   panel.classList.remove("hidden");
   content.innerHTML = `<div style="padding:1rem;color:#888">読み込み中...</div>`;
   try {
-    const resp = await fetch("/api/common-knowledge/organization/goals.md");
-    const data = await resp.json();
-    _goalsContent = data.content || "";
+    const [goalsResp, unitsResp, animasResp] = await Promise.all([
+      fetch("/api/common-knowledge/organization/goals.md"),
+      fetch("/api/system/units"),
+      fetch("/api/animas"),
+    ]);
+    const goalsData = await goalsResp.json();
+    const unitsData = await unitsResp.json();
+    _allAnimas = await animasResp.json();
+    _goalsContent = goalsData.content || "";
+    _unitDefs = (unitsData && unitsData.units) || {};
+    _updateGoalsTabs();
+    _activeGoalsUnit = "all";
     renderGoalsView();
   } catch (e) {
     content.innerHTML = `<div style="padding:1rem;color:red">読み込み失敗: ${e.message}</div>`;
   }
+}
+
+function _updateGoalsTabs() {
+  const tabsEl = document.getElementById("orgGoalsTabs");
+  if (!tabsEl) return;
+  const buttons = [`<button class="org-goals-tab${_activeGoalsUnit === "all" ? " active" : ""}" data-unit="all">すべて</button>`];
+  for (const [code, def] of Object.entries(_unitDefs)) {
+    buttons.push(`<button class="org-goals-tab${_activeGoalsUnit === code ? " active" : ""}" data-unit="${escapeHtml(code)}">${escapeHtml(def.name || code)}</button>`);
+  }
+  buttons.push(`<button class="org-goals-tab org-goals-tab-manage${_activeGoalsUnit === "_manage" ? " active" : ""}" data-unit="_manage">⚙ 管理</button>`);
+  tabsEl.innerHTML = buttons.join("");
 }
 
 function closeGoalsPanel() {
@@ -333,6 +359,168 @@ function simpleMarkdown(md) {
     .replace(/(<tr>.*?<\/tr>\s*)+/gs, m => `<table class="org-goals-table">${m}</table>`)
     .replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")
     .replace(/^/, "<p>").replace(/$/, "</p>");
+}
+
+// ── Units Management ─────────────────────────
+
+function _showUnitsManagement() {
+  document.getElementById("orgGoalsContent").classList.add("hidden");
+  document.getElementById("orgGoalsEditor").classList.add("hidden");
+  document.getElementById("orgGoalsEditBtn").classList.add("hidden");
+  document.getElementById("orgGoalsSaveBtn").classList.add("hidden");
+  document.getElementById("orgGoalsCancelBtn").classList.add("hidden");
+  const section = document.getElementById("orgUnitsSection");
+  section.classList.remove("hidden");
+  _renderUnitsList();
+}
+
+function _hideUnitsManagement() {
+  const section = document.getElementById("orgUnitsSection");
+  if (section) section.classList.add("hidden");
+  document.getElementById("orgGoalsEditBtn").classList.remove("hidden");
+}
+
+function _renderUnitsList() {
+  const section = document.getElementById("orgUnitsSection");
+  const entries = Object.entries(_unitDefs);
+  let html = `<div class="org-units-header">
+    <h3>事業部管理</h3>
+    <button class="org-goals-edit-btn" id="orgUnitAddBtn">+ 追加</button>
+  </div>`;
+
+  if (entries.length === 0) {
+    html += `<p style="color:#888;padding:0.5rem">事業部が定義されていません。</p>`;
+  } else {
+    for (const [code, def] of entries) {
+      const memberTags = (def.members || []).map(m =>
+        `<span class="org-unit-member-tag${m === def.leader ? " leader" : ""}">${escapeHtml(m)}${m === def.leader ? " ★" : ""}</span>`
+      ).join("");
+      html += `<div class="org-unit-card" data-code="${escapeHtml(code)}">
+        <div class="org-unit-card-header">
+          <strong>${escapeHtml(def.name)}</strong>
+          <span class="org-unit-code">${escapeHtml(code)}</span>
+          <div class="org-unit-card-actions">
+            <button class="org-unit-edit-btn" data-code="${escapeHtml(code)}">編集</button>
+            <button class="org-unit-delete-btn" data-code="${escapeHtml(code)}">削除</button>
+          </div>
+        </div>
+        <div class="org-unit-members">${memberTags}</div>
+      </div>`;
+    }
+  }
+
+  html += `<div id="orgUnitFormArea"></div>`;
+  section.innerHTML = html;
+
+  section.querySelector("#orgUnitAddBtn")?.addEventListener("click", () => _showUnitForm(null));
+  section.querySelectorAll(".org-unit-edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => _showUnitForm(btn.dataset.code));
+  });
+  section.querySelectorAll(".org-unit-delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => _deleteUnit(btn.dataset.code));
+  });
+}
+
+function _showUnitForm(editCode) {
+  const isNew = !editCode;
+  const existing = isNew ? { name: "", leader: "", members: [] } : (_unitDefs[editCode] || {});
+  const formArea = document.getElementById("orgUnitFormArea");
+  const animaNames = Array.isArray(_allAnimas) ? _allAnimas.map(a => a.name) : [];
+
+  const memberChecks = animaNames.map(name => {
+    const checked = (existing.members || []).includes(name) ? "checked" : "";
+    return `<label class="org-unit-check"><input type="checkbox" value="${escapeHtml(name)}" ${checked}> ${escapeHtml(name)}</label>`;
+  }).join("");
+
+  formArea.innerHTML = `<div class="org-unit-form">
+    <h4>${isNew ? "新規事業部" : `${escapeHtml(existing.name)} を編集`}</h4>
+    <div class="org-unit-form-row">
+      <label>事業部名</label>
+      <input type="text" id="orgUnitName" value="${escapeHtml(existing.name || "")}" placeholder="例: YouTube事業部">
+    </div>
+    ${isNew ? `<div class="org-unit-form-row">
+      <label>コード（英数小文字）</label>
+      <input type="text" id="orgUnitCode" value="" placeholder="例: youtube" pattern="[a-z0-9_]+">
+    </div>` : ""}
+    <div class="org-unit-form-row">
+      <label>メンバー</label>
+      <div class="org-unit-member-checks" id="orgUnitMembers">${memberChecks}</div>
+    </div>
+    <div class="org-unit-form-row">
+      <label>リーダー</label>
+      <select id="orgUnitLeader"></select>
+    </div>
+    <div class="org-unit-form-actions">
+      <button class="org-goals-save-btn" id="orgUnitSaveBtn">保存</button>
+      <button class="org-goals-cancel-btn" id="orgUnitCancelBtn">キャンセル</button>
+    </div>
+  </div>`;
+
+  const updateLeaderDropdown = () => {
+    const checked = [...formArea.querySelectorAll("#orgUnitMembers input:checked")].map(c => c.value);
+    const leaderSel = formArea.querySelector("#orgUnitLeader");
+    const current = leaderSel.value;
+    leaderSel.innerHTML = checked.map(n =>
+      `<option value="${escapeHtml(n)}"${n === (existing.leader || current) ? " selected" : ""}>${escapeHtml(n)}</option>`
+    ).join("");
+  };
+  updateLeaderDropdown();
+  formArea.querySelectorAll("#orgUnitMembers input").forEach(cb => cb.addEventListener("change", updateLeaderDropdown));
+
+  formArea.querySelector("#orgUnitSaveBtn").addEventListener("click", () => _saveUnit(editCode));
+  formArea.querySelector("#orgUnitCancelBtn").addEventListener("click", () => { formArea.innerHTML = ""; });
+}
+
+async function _saveUnit(editCode) {
+  const formArea = document.getElementById("orgUnitFormArea");
+  const name = formArea.querySelector("#orgUnitName").value.trim();
+  const code = editCode || (formArea.querySelector("#orgUnitCode")?.value.trim() || "");
+  const members = [...formArea.querySelectorAll("#orgUnitMembers input:checked")].map(c => c.value);
+  const leader = formArea.querySelector("#orgUnitLeader").value;
+
+  if (!name) { alert("事業部名を入力してください"); return; }
+  if (!code || !/^[a-z0-9_]+$/.test(code)) { alert("コードは英数小文字で入力してください"); return; }
+  if (members.length === 0) { alert("メンバーを1人以上選択してください"); return; }
+  if (!leader) { alert("リーダーを選択してください"); return; }
+
+  _unitDefs[code] = { name, leader, members };
+
+  try {
+    const resp = await fetch("/api/system/units", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ units: _unitDefs }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(`保存失敗: ${err.error || "不明なエラー"}`);
+      return;
+    }
+    _updateGoalsTabs();
+    _activeGoalsUnit = "_manage";
+    _renderUnitsList();
+  } catch (e) {
+    alert(`保存失敗: ${e.message}`);
+  }
+}
+
+async function _deleteUnit(code) {
+  const def = _unitDefs[code];
+  if (!confirm(`「${def?.name || code}」を削除しますか？`)) return;
+
+  delete _unitDefs[code];
+
+  try {
+    await fetch("/api/system/units", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ units: _unitDefs }),
+    });
+    _updateGoalsTabs();
+    _renderUnitsList();
+  } catch (e) {
+    alert(`削除失敗: ${e.message}`);
+  }
 }
 
 export function disposeOrgDashboard() {

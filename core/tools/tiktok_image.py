@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import uuid
 import urllib.request
@@ -46,6 +47,9 @@ NO_TEXT_NEGATIVES = (
 FAL_MODEL = "fal-ai/flux/schnell"
 IMAGE_SIZE = "portrait_16_9"  # 9:16 vertical for TikTok
 NUM_INFERENCE_STEPS = 4
+
+# Cat mascot assets directory
+_CATS_DIR = Path(os.path.expanduser("~/.animaworks/assets/cats"))
 
 # ── Font fallback for emoji/special chars ─────────────────
 
@@ -208,8 +212,40 @@ def _draw_text_overlay(text: str, font, img_w: int, img_h: int, vertical: str = 
     return overlay
 
 
+def _composite_cat(img: "Image.Image", cat_height_ratio: float = 0.30) -> "Image.Image":
+    """Composite a random cat mascot onto the lower-left of the image.
+
+    Ported from ai-tiktok/automation/scripts/overlay_text.py.
+    """
+    from PIL import Image
+
+    cat_files = sorted(_CATS_DIR.glob("*.png"))
+    if not cat_files:
+        logger.warning("No cat assets found in %s", _CATS_DIR)
+        return img
+
+    cat_path = random.choice(cat_files)
+    cat = Image.open(cat_path).convert("RGBA")
+
+    target_h = int(img.height * cat_height_ratio)
+    scale = target_h / cat.height
+    target_w = int(cat.width * scale)
+    cat = cat.resize((target_w, target_h), Image.LANCZOS)
+
+    margin = 10
+    x = margin
+    y = img.height - target_h - margin
+
+    base = img.convert("RGBA")
+    base.paste(cat, (x, y), mask=cat)
+    return base
+
+
 def _composite_text_on_image(image_path: str, overlay_text: str, slide_index: int) -> bool:
-    """Composite overlay text onto an existing image file."""
+    """Composite overlay text onto an existing image file.
+
+    For slide 1: text is placed upper, cat mascot is composited at lower-left.
+    """
     from PIL import Image
 
     try:
@@ -220,8 +256,13 @@ def _composite_text_on_image(image_path: str, overlay_text: str, slide_index: in
             img = img.convert("RGBA")
             vertical = "upper" if slide_index == 0 else "center"
             overlay = _draw_text_overlay(text, font, img.width, img.height, vertical=vertical)
-            final = Image.alpha_composite(img, overlay).convert("RGB")
-            final.save(image_path, "PNG")
+            final = Image.alpha_composite(img, overlay)
+
+            # Slide 1 only: composite cat mascot at lower-left
+            if slide_index == 0:
+                final = _composite_cat(final)
+
+            final.convert("RGB").save(image_path, "PNG")
 
         logger.info("Text composited on slide %d: %s", slide_index + 1, image_path)
         return True

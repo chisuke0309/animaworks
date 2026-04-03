@@ -225,39 +225,54 @@ class HeartbeatMixin:
         try:
             from core.memory.task_queue import TaskQueueManager
             tq = TaskQueueManager(self.anima_dir)
+
+            notification = ""
+
+            # Phase 1: Auto-block tasks stale for 2+ hours
             blocked = tq.auto_block_stale_tasks()
-            if not blocked:
-                return ""
-
-            items = "\n".join(
-                f"  - [{task.task_id[:8]}] {task.summary[:100]}"
-                for task in blocked
-            )
-
-            # Reset current_task.md to idle if it's not already
-            current_state = self.memory.read_current_state()
-            if "status: idle" not in current_state.lower():
-                ts = now_jst().strftime("%Y-%m-%d %H:%M")
-                self.memory.update_state(
-                    f"status: idle\n\n"
-                    f"---\n\n"
-                    f"⚠️ {ts}: 以下のタスクを自動blocked化しました（2時間更新なし）:\n{items}"
+            if blocked:
+                items = "\n".join(
+                    f"  - [{task.task_id[:8]}] {task.summary[:100]}"
+                    for task in blocked
                 )
 
-            # Record in activity log
-            self._activity.log(
-                "task_auto_blocked",
-                summary=f"タスク自動blocked: {len(blocked)}件",
-                meta={"blocked_count": len(blocked), "task_ids": [task.task_id for task in blocked]},
-            )
+                # Reset current_task.md to idle if it's not already
+                current_state = self.memory.read_current_state()
+                if "status: idle" not in current_state.lower():
+                    ts = now_jst().strftime("%Y-%m-%d %H:%M")
+                    self.memory.update_state(
+                        f"status: idle\n\n"
+                        f"---\n\n"
+                        f"⚠️ {ts}: 以下のタスクを自動blocked化しました（2時間更新なし）:\n{items}"
+                    )
 
-            return (
-                f"## ⚠️ スタックタスク自動blocked通知\n\n"
-                f"以下の {len(blocked)} 件のタスクが2時間以上更新されていないため、"
-                f"自動的にblocked状態に遷移しました。\n"
-                f"依頼者への報告が必要な場合はsend_messageで連絡してください。\n\n"
-                f"{items}"
-            )
+                self._activity.log(
+                    "task_auto_blocked",
+                    summary=f"タスク自動blocked: {len(blocked)}件",
+                    meta={"blocked_count": len(blocked), "task_ids": [task.task_id for task in blocked]},
+                )
+
+                notification = (
+                    f"## ⚠️ スタックタスク自動blocked通知\n\n"
+                    f"以下の {len(blocked)} 件のタスクが2時間以上更新されていないため、"
+                    f"自動的にblocked状態に遷移しました。\n"
+                    f"依頼者への報告が必要な場合はsend_messageで連絡してください。\n\n"
+                    f"{items}"
+                )
+
+            # Phase 2: Auto-resolve tasks stale for 24+ hours
+            resolved = tq.auto_resolve_old_tasks()
+            if resolved:
+                self._activity.log(
+                    "task_auto_resolved",
+                    summary=f"タスク自動完了: {len(resolved)}件（24時間以上更新なし）",
+                    meta={"resolved_count": len(resolved), "task_ids": [t.task_id for t in resolved]},
+                )
+
+            # Phase 3: Compact JSONL if it has grown too large
+            tq.maybe_compact()
+
+            return notification
         except Exception:
             logger.debug("[%s] Failed to auto-block stale tasks", self.name, exc_info=True)
             return ""

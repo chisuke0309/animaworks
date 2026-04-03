@@ -62,6 +62,9 @@ def _sanitise_tool_args(tool_name: str, tool_input: dict[str, Any]) -> dict[str,
     return tool_input
 
 
+_MCP_AW_PREFIX = "mcp__aw__"
+
+
 def _log_tool_use(
     anima_dir: Path,
     tool_name: str,
@@ -71,7 +74,14 @@ def _log_tool_use(
     blocked: bool = False,
     block_reason: str = "",
 ) -> None:
-    """Record a tool call to the activity log (best-effort, never raises)."""
+    """Record a tool call to the activity log (best-effort, never raises).
+
+    Internal MCP tools (``mcp__aw__*``) are already logged by
+    :class:`ToolHandler` on the server side, so we skip them here to
+    avoid duplicate activity-log entries.
+    """
+    if tool_name.startswith(_MCP_AW_PREFIX) and not blocked:
+        return
     try:
         from core.memory.activity import ActivityLogger
 
@@ -101,7 +111,13 @@ def _log_tool_result(
     *,
     is_error: bool = False,
 ) -> None:
-    """Record a tool result to the activity log (best-effort, never raises)."""
+    """Record a tool result to the activity log (best-effort, never raises).
+
+    Internal MCP tools (``mcp__aw__*``) are already logged by
+    :class:`ToolHandler`, so skip to avoid duplicates.
+    """
+    if tool_name.startswith(_MCP_AW_PREFIX):
+        return
     try:
         from core.memory.activity import ActivityLogger
 

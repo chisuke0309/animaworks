@@ -18,6 +18,7 @@ let _lastRenderKey = "";
 let _eventsById = new Map();
 let _activeUnit = "all";   // "all" | "x" | "tiktok"
 let _unitMap = {};          // { animaName → "x" | "tiktok" }
+let _unitDefs = {};         // units.json の units オブジェクト
 
 export function render(container) {
   _lastRenderKey = "";
@@ -33,8 +34,6 @@ export function render(container) {
       </div>
       <div class="page-tabs" id="plTabs">
         <button class="page-tab active" data-unit="all">すべて</button>
-        <button class="page-tab" data-unit="x">X事業部</button>
-        <button class="page-tab" data-unit="tiktok">TikTok事業部</button>
       </div>
       <div class="pipeline-feed" id="plFeed">
         <div class="pipeline-empty">読み込み中...</div>
@@ -100,15 +99,21 @@ function _startPolling(container) {
 
 async function _poll(container) {
   try {
-    const [data, animas] = await Promise.all([
+    const [data, animas, unitsData] = await Promise.all([
       api(`/api/activity/recent?hours=${HOURS}&grouped=false&limit=${MAX_EVENTS}`),
       api("/api/animas"),
+      api("/api/system/units"),
     ]);
     const feed = container.querySelector("#plFeed");
     if (!feed) return;
 
-    // Build unit map from animas supervisor field
-    _unitMap = _buildUnitMap(animas || []);
+    // Build unit map from units.json (data-driven, not hardcoded)
+    _unitDefs = (unitsData && unitsData.units) || {};
+    _unitMap = _buildUnitMap(_unitDefs);
+
+    // Dynamically update unit tabs
+    const tabsEl = container.querySelector("#plTabs");
+    if (tabsEl) _updateUnitTabs(tabsEl);
 
     const raw = (data.events || []).filter(e => SHOW_TYPES.has(e.type));
     const events = _deduplicate(raw).sort((a, b) => a.ts.localeCompare(b.ts));
@@ -202,31 +207,40 @@ function _groupIntoJobs(events) {
     }
   }
 
-  // ── Pass 2: pipeline_id なし → 旧来の時系列グルーピング ──
+  // ── Pass 2: pipeline_id なし → 事業部別に時系列グルーピング ──
+  // 事業部をまたいだイベントが同じジョブに混入しないよう、事業部ごとに分離してからグループ化
   const legacyJobs = [];
-  let current = null;
+  const unitBuckets = {};  // unit → [events]
   for (const ev of timeBased) {
-    const isUserMsg =
-      ev.type === "message_received" &&
-      (ev.from_person === "human" || ev.from_person === "user" || ev.meta?.from === "human");
-    const isCron = ev.type === "cron_executed";
-    const ts = new Date(ev.ts).getTime();
+    const unit = _unitMap[ev.anima] || "_unknown";
+    if (!unitBuckets[unit]) unitBuckets[unit] = [];
+    unitBuckets[unit].push(ev);
+  }
+  for (const [, unitEvents] of Object.entries(unitBuckets)) {
+    let current = null;
+    for (const ev of unitEvents) {
+      const isUserMsg =
+        ev.type === "message_received" &&
+        (ev.from_person === "human" || ev.from_person === "user" || ev.meta?.from === "human");
+      const isCron = ev.type === "cron_executed";
+      const ts = new Date(ev.ts).getTime();
 
-    if (isUserMsg || isCron) {
-      current = { id: ev.id, trigger: ev, startTs: ts, lastTs: ts, steps: [], status: "done" };
-      legacyJobs.push(current);
-      continue;
+      if (isUserMsg || isCron) {
+        current = { id: ev.id, trigger: ev, startTs: ts, lastTs: ts, steps: [], status: "done" };
+        legacyJobs.push(current);
+        continue;
+      }
+      if (!current) {
+        current = { id: "misc-" + ev.ts, trigger: null, startTs: ts, lastTs: ts, steps: [], status: "done" };
+        legacyJobs.push(current);
+      }
+      if (ts - current.lastTs > JOB_GAP_MS) {
+        current = { id: "gap-" + ev.ts, trigger: null, startTs: ts, lastTs: ts, steps: [], status: "done" };
+        legacyJobs.push(current);
+      }
+      current.steps.push(ev);
+      current.lastTs = ts;
     }
-    if (!current) {
-      current = { id: "misc-" + ev.ts, trigger: null, startTs: ts, lastTs: ts, steps: [], status: "done" };
-      legacyJobs.push(current);
-    }
-    if (ts - current.lastTs > JOB_GAP_MS) {
-      current = { id: "gap-" + ev.ts, trigger: null, startTs: ts, lastTs: ts, steps: [], status: "done" };
-      legacyJobs.push(current);
-    }
-    current.steps.push(ev);
-    current.lastTs = ts;
   }
 
   // ── 全ジョブを統合して整形 ──
@@ -374,19 +388,31 @@ function _showDetail(container, ev) {
   requestAnimationFrame(() => panel.classList.add("pl-detail-open"));
 }
 
+// ── Unit tabs (dynamic from units.json) ─────────
+
+function _updateUnitTabs(tabsEl) {
+  const unitCodes = Object.keys(_unitDefs);
+  // 「すべて」+ 各事業部のボタンを生成
+  const buttons = [`<button class="page-tab${_activeUnit === "all" ? " active" : ""}" data-unit="all">すべて</button>`];
+  for (const code of unitCodes) {
+    const name = _unitDefs[code].name || code;
+    buttons.push(`<button class="page-tab${_activeUnit === code ? " active" : ""}" data-unit="${code}">${escapeHtml(name)}</button>`);
+  }
+  const newHtml = buttons.join("");
+  if (tabsEl.innerHTML !== newHtml) {
+    tabsEl.innerHTML = newHtml;
+  }
+}
+
 // ── Unit mapping & filtering ──────────────────
 
-function _buildUnitMap(animas) {
-  // Step 1: find leaders (supervisor=null)
-  const leaders = animas.filter(a => !a.supervisor).map(a => a.name);
-  // Step 2: map each anima to its leader's unit
+function _buildUnitMap(unitDefs) {
+  // units.json の members リストから { animaName → unitCode } マップを構築
   const map = {};
-  for (const a of animas) {
-    const leader = a.supervisor || a.name;
-    // Determine unit name from leader
-    // cicchi → "x", maru → "tiktok", others → leader name
-    const unit = leader === "cicchi" ? "x" : leader === "maru" ? "tiktok" : leader;
-    map[a.name] = unit;
+  for (const [unitCode, def] of Object.entries(unitDefs)) {
+    for (const member of (def.members || [])) {
+      map[member] = unitCode;
+    }
   }
   return map;
 }
@@ -394,9 +420,18 @@ function _buildUnitMap(animas) {
 function _filterJobsByUnit(jobs, unit) {
   if (unit === "all") return jobs;
   return jobs.filter(j => {
-    // トリガーのanimaで判定。なければ最初のステップのanima
-    const anima = j.trigger?.anima || j.steps[0]?.anima || "";
-    return _unitMap[anima] === unit;
+    // ジョブ内の全ステップのanimaを集め、過半数の事業部で判定
+    const counts = {};
+    for (const s of j.steps) {
+      const u = _unitMap[s.anima];
+      if (u) counts[u] = (counts[u] || 0) + 1;
+    }
+    // 最多の事業部がunitと一致するか
+    let maxUnit = "", maxCount = 0;
+    for (const [u, c] of Object.entries(counts)) {
+      if (c > maxCount) { maxUnit = u; maxCount = c; }
+    }
+    return maxUnit === unit;
   });
 }
 

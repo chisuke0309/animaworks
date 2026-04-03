@@ -150,6 +150,43 @@ def create_system_router() -> APIRouter:
             return []
         return [d.name for d in sorted(users_dir.iterdir()) if d.is_dir()]
 
+    @router.get("/system/units")
+    async def get_units(request: Request):
+        """Return unit definitions from units.json."""
+        from core.paths import get_data_dir
+        units_path = get_data_dir() / "units.json"
+        if not units_path.is_file():
+            return {"units": {}}
+        try:
+            return json.loads(units_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"units": {}}
+
+    @router.put("/system/units")
+    async def update_units(request: Request):
+        """Update unit definitions in units.json."""
+        from core.paths import get_data_dir
+        try:
+            body = await request.json()
+            units = body.get("units")
+            if not isinstance(units, dict):
+                return JSONResponse({"error": "units must be an object"}, status_code=400)
+            for code, unit in units.items():
+                if not isinstance(unit.get("name"), str) or not unit["name"]:
+                    return JSONResponse({"error": f"Unit '{code}' missing 'name'"}, status_code=400)
+                if not isinstance(unit.get("leader"), str) or not unit["leader"]:
+                    return JSONResponse({"error": f"Unit '{code}' missing 'leader'"}, status_code=400)
+                if not isinstance(unit.get("members"), list) or not unit["members"]:
+                    return JSONResponse({"error": f"Unit '{code}' missing 'members'"}, status_code=400)
+                if unit["leader"] not in unit["members"]:
+                    return JSONResponse({"error": f"Unit '{code}': leader must be in members"}, status_code=400)
+            units_path = get_data_dir() / "units.json"
+            units_path.write_text(json.dumps({"units": units}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            return {"success": True, "units": units}
+        except Exception as e:
+            logger.exception("Failed to update units")
+            return JSONResponse({"error": str(e)}, status_code=500)
+
     @router.get("/system/status")
     async def system_status(request: Request):
         supervisor = request.app.state.supervisor
