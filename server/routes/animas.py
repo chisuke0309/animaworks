@@ -102,7 +102,7 @@ def create_animas_router() -> APIRouter:
 
         memory = MemoryManager(anima_dir)
 
-        identity, injection, cur_state, pending, k_files, e_files, p_files = (
+        identity, injection, cur_state, pending, k_files, e_files, p_files, hb_content = (
             await asyncio.gather(
                 asyncio.to_thread(memory.read_identity),
                 asyncio.to_thread(memory.read_injection),
@@ -111,8 +111,22 @@ def create_animas_router() -> APIRouter:
                 asyncio.to_thread(memory.list_knowledge_files),
                 asyncio.to_thread(memory.list_episode_files),
                 asyncio.to_thread(memory.list_procedure_files),
+                asyncio.to_thread(memory.read_heartbeat_config),
             )
         )
+
+        # Parse heartbeat mode and active hours
+        from core.schedule_parser import parse_heartbeat_config
+        active_start, active_end = parse_heartbeat_config(hb_content)
+        if active_start == -1 and active_end == -1:
+            hb_mode = "inbox_only"
+            hb_hours = None
+        elif active_start is not None and active_end is not None:
+            hb_mode = "scheduled"
+            hb_hours = f"{active_start}:00-{active_end}:00"
+        else:
+            hb_mode = "scheduled"
+            hb_hours = "24h"
 
         return {
             "status": proc_status,
@@ -123,6 +137,8 @@ def create_animas_router() -> APIRouter:
             "knowledge_files": k_files,
             "episode_files": e_files,
             "procedure_files": p_files,
+            "heartbeat_mode": hb_mode,
+            "heartbeat_active_hours": hb_hours,
         }
 
     @router.post("/animas/{name}/trigger")
@@ -376,23 +392,52 @@ def create_animas_router() -> APIRouter:
             raise HTTPException(status_code=404, detail=f"Anima '{name}' not found")
 
         body = await request.json()
+
+        # Handle heartbeat config updates (written to heartbeat.md, not status.json)
+        hb_mode = body.pop("heartbeat_mode", None)
+        hb_hours_start = body.pop("heartbeat_hours_start", None)
+        hb_hours_end = body.pop("heartbeat_hours_end", None)
+        hb_updated = False
+        if hb_mode is not None:
+            hb_path = anima_dir / "heartbeat.md"
+            hb_content = hb_path.read_text(encoding="utf-8") if hb_path.exists() else ""
+            import re as _re
+            if hb_mode == "inbox_only":
+                new_active = "active_hours: inbox_only"
+            elif hb_hours_start is not None and hb_hours_end is not None:
+                new_active = f"active_hours: {hb_hours_start}:00 - {hb_hours_end}:00"
+            else:
+                new_active = "active_hours: 6:00 - 22:00"
+            if _re.search(r"^active_hours:.*$", hb_content, _re.MULTILINE):
+                hb_content = _re.sub(r"^active_hours:.*$", new_active, hb_content, count=1, flags=_re.MULTILINE)
+            else:
+                # Insert after first line (# Heartbeat: name)
+                lines = hb_content.split("\n")
+                insert_idx = 1 if len(lines) > 0 else 0
+                lines.insert(insert_idx, "")
+                lines.insert(insert_idx + 1, new_active)
+                hb_content = "\n".join(lines)
+            hb_path.write_text(hb_content, encoding="utf-8")
+            hb_updated = True
+
         allowed_fields = {"model", "supervisor", "speciality", "max_tokens", "max_turns", "thinking", "thinking_effort"}
         updates = {k: v for k, v in body.items() if k in allowed_fields}
-        if not updates:
+        if not updates and not hb_updated:
             raise HTTPException(status_code=400, detail="No valid fields to update")
 
-        # Update status.json (SSoT)
-        status_file = anima_dir / "status.json"
-        existing = {}
-        if status_file.exists():
-            try:
-                existing = json.loads(status_file.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                pass
-        existing.update(updates)
-        status_file.write_text(
-            json.dumps(existing, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        # Update status.json (SSoT) — only if there are non-heartbeat updates
+        if updates:
+            status_file = anima_dir / "status.json"
+            existing = {}
+            if status_file.exists():
+                try:
+                    existing = json.loads(status_file.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    pass
+            existing.update(updates)
+            status_file.write_text(
+                json.dumps(existing, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
 
         # Also update config.json animas entry for consistency
         try:
@@ -426,7 +471,7 @@ def create_animas_router() -> APIRouter:
 
         return {
             "name": name,
-            "updated": updates,
+            "updated": {**updates, **({"heartbeat_mode": hb_mode} if hb_updated else {})},
             "reload": reload_result,
         }
 

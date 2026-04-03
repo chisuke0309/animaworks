@@ -261,15 +261,46 @@ async function _showDetail(name) {
         ? `<option value="${escapeHtml(currentModel)}" selected>${escapeHtml(currentModel)}</option>`
         : "";
 
+      // Heartbeat config
+      const hbMode = detail.heartbeat_mode || "scheduled";
+      const hbHours = detail.heartbeat_active_hours || "24h";
+      let hbStart = 6, hbEnd = 22;
+      if (hbHours && hbHours !== "24h") {
+        const hm = hbHours.match(/(\d+):\d+\s*-\s*(\d+)/);
+        if (hm) { hbStart = parseInt(hm[1]); hbEnd = parseInt(hm[2]); }
+      }
+      const hourOpts = (selVal) => Array.from({length: 24}, (_, i) =>
+        `<option value="${i}" ${i === selVal ? "selected" : ""}>${i}:00</option>`
+      ).join("");
+      const isInboxOnly = hbMode === "inbox_only";
+
       html += `
         <div class="card" style="margin-bottom: 1.5rem;">
           <div class="card-header">${t("animas.model_config")}</div>
-          <div class="card-body" style="display:flex; align-items:center; gap:1rem;">
-            <label style="font-weight:600; white-space:nowrap;">Model:</label>
-            <select id="animaModelSelect" style="flex:1; padding:0.4rem 0.6rem; border:1px solid var(--border, #ddd); border-radius:6px; font-size:0.9rem;">
-              ${extra}${options}
-            </select>
-            <span id="animaModelStatus" style="font-size:0.8rem; color:var(--text-secondary, #666);"></span>
+          <div class="card-body" style="display:flex; flex-direction:column; gap:0.75rem;">
+            <div style="display:flex; align-items:center; gap:1rem;">
+              <label style="font-weight:600; white-space:nowrap; min-width:100px;">Model:</label>
+              <select id="animaModelSelect" style="flex:1; padding:0.4rem 0.6rem; border:1px solid var(--border, #ddd); border-radius:6px; font-size:0.9rem;">
+                ${extra}${options}
+              </select>
+              <span id="animaModelStatus" style="font-size:0.8rem; color:var(--text-secondary, #666);"></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:1rem;">
+              <label style="font-weight:600; white-space:nowrap; min-width:100px;">Heartbeat:</label>
+              <select id="animaHbMode" style="padding:0.4rem 0.6rem; border:1px solid var(--border, #ddd); border-radius:6px; font-size:0.9rem;">
+                <option value="inbox_only" ${isInboxOnly ? "selected" : ""}>inbox_only</option>
+                <option value="scheduled" ${!isInboxOnly ? "selected" : ""}>scheduled</option>
+              </select>
+              <label style="font-weight:600; white-space:nowrap;">稼働時間:</label>
+              <select id="animaHbStart" style="padding:0.4rem 0.6rem; border:1px solid var(--border, #ddd); border-radius:6px; font-size:0.9rem;" ${isInboxOnly ? "disabled" : ""}>
+                ${hourOpts(hbStart)}
+              </select>
+              <span>-</span>
+              <select id="animaHbEnd" style="padding:0.4rem 0.6rem; border:1px solid var(--border, #ddd); border-radius:6px; font-size:0.9rem;" ${isInboxOnly ? "disabled" : ""}>
+                ${hourOpts(hbEnd)}
+              </select>
+              <span id="animaHbStatus" style="font-size:0.8rem; color:var(--text-secondary, #666);"></span>
+            </div>
           </div>
         </div>
       `;
@@ -304,6 +335,45 @@ async function _showDetail(name) {
         setTimeout(() => { if (statusEl) statusEl.textContent = ""; select.disabled = false; }, 3000);
       }
     });
+
+    // Bind heartbeat mode/hours selectors
+    const hbModeEl = document.getElementById("animaHbMode");
+    const hbStartEl = document.getElementById("animaHbStart");
+    const hbEndEl = document.getElementById("animaHbEnd");
+    const hbStatusEl = document.getElementById("animaHbStatus");
+
+    // Toggle hours selectors when mode changes
+    hbModeEl?.addEventListener("change", () => {
+      const disabled = hbModeEl.value === "inbox_only";
+      if (hbStartEl) hbStartEl.disabled = disabled;
+      if (hbEndEl) hbEndEl.disabled = disabled;
+    });
+
+    // Save heartbeat config on any change
+    const saveHbConfig = async () => {
+      if (hbStatusEl) { hbStatusEl.textContent = "Updating..."; hbStatusEl.style.color = ""; }
+      const mode = hbModeEl?.value || "scheduled";
+      const payload = { heartbeat_mode: mode };
+      if (mode === "scheduled") {
+        payload.heartbeat_hours_start = parseInt(hbStartEl?.value || "6");
+        payload.heartbeat_hours_end = parseInt(hbEndEl?.value || "22");
+      }
+      try {
+        await fetch(`/api/animas/${encodeURIComponent(name)}/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (hbStatusEl) { hbStatusEl.textContent = "✅ Updated (restart required)"; hbStatusEl.style.color = "#2a2"; }
+        setTimeout(() => { if (hbStatusEl) hbStatusEl.textContent = ""; }, 4000);
+      } catch (err) {
+        if (hbStatusEl) { hbStatusEl.textContent = "❌ Failed"; hbStatusEl.style.color = "#c22"; }
+        setTimeout(() => { if (hbStatusEl) hbStatusEl.textContent = ""; }, 3000);
+      }
+    };
+    hbModeEl?.addEventListener("change", saveHbConfig);
+    hbStartEl?.addEventListener("change", saveHbConfig);
+    hbEndEl?.addEventListener("change", saveHbConfig);
 
     // Bind trigger button
     document.getElementById("animaDetailTrigger")?.addEventListener("click", async (e) => {
