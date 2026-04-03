@@ -24,7 +24,7 @@ from typing import Optional
 
 ANIMA_BASE = Path(os.path.expanduser("~/.animaworks/animas"))
 SHARED_BASE = Path(os.path.expanduser("~/.animaworks/shared"))
-ANIMAS = ["cicchi", "kuro", "rue", "sora"]
+ANIMAS = ["cicchi", "kuro", "rue", "sora", "hana", "maru", "chiro", "tama"]
 
 # スキャン対象（top-level md + knowledge/ + procedures/）
 TOP_LEVEL_FILES = ["identity.md", "injection.md", "cron.md", "permissions.md"]
@@ -52,7 +52,8 @@ VALID_TOOL_NAMES = {
     "task_tracker", "transcribe_audio", "update_task", "web_fetch",
     "web_search", "write_file", "write_memory_file", "x_post",
     "x_post_thread", "x_post_save_pending", "x_post_execute_pending",
-    "x_search", "x_user_tweets",
+    "x_search", "x_user_tweets", "x_post_update_engagement",
+    "x_like", "x_reply", "x_quote",
 }
 
 # 廃止済み用語とその説明
@@ -230,6 +231,9 @@ def check_tool_names(files: list[tuple[str, str, str]], report: LintReport):
                     "x_post_log", "activity_log", "topic_label", "kuro_done",
                     "generate_tiktok_image", "portrait_4_3", "tiktok_prompt_templates",
                     "test3_step2_writing", "index_meta", "x_post_test3",
+                    "from_person", "to_person", "in_reply_to_tweet_id",
+                    "quote_tweet_id", "likes_per_session", "replies_per_session",
+                    "quotes_per_session", "tiktok_body", "overlay_texts",
                 }
                 if name in NON_TOOL_NAMES:
                     continue
