@@ -204,6 +204,17 @@ class LifecycleManager:
 
         # Determine active hours from heartbeat.md
         active_start, active_end = parse_heartbeat_config(hb_content)
+
+        # active_hours: off / inbox_only → skip periodic heartbeat entirely.
+        # Inbox watcher (Path A) and cron tasks still function normally.
+        if active_start == -1 and active_end == -1:
+            logger.info(
+                "Heartbeat '%s': DISABLED (inbox_only mode). "
+                "Inbox watcher and cron tasks remain active.",
+                anima.name,
+            )
+            return
+
         if active_start is not None and active_end is not None:
             hour_spec = f"{active_start}-{active_end - 1}"
             log_active = f"active {active_start}:00-{active_end}:00"

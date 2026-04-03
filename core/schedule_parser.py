@@ -39,10 +39,20 @@ def parse_heartbeat_config(content: str) -> tuple[int | None, int | None]:
     Interval is managed by config.json (heartbeat.interval_minutes),
     NOT parsed from heartbeat.md content.
 
+    Special values:
+        ``active_hours: off`` or ``active_hours: inbox_only``
+        disables periodic heartbeat entirely.  Returns (-1, -1).
+        The anima still responds to inbox messages via the inbox
+        watcher (Path A) and cron tasks continue to fire normally.
+
     Returns:
         Tuple of (active_start_hour, active_end_hour).
+        (-1, -1) if heartbeat is disabled (off / inbox_only).
         Both are None if no time range found in content.
     """
+    # Check for explicit disable keywords
+    if re.search(r"active_hours:\s*(off|inbox_only)\b", content, re.IGNORECASE):
+        return -1, -1
     m = re.search(r"(\d{1,2}):\d{0,2}\s*-\s*(\d{1,2})", content)
     if m:
         return int(m.group(1)), int(m.group(2))
