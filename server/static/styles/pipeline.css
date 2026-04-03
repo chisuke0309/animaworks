@@ -177,11 +177,14 @@
 .pf-anima-tag.rue    { background: #db2777; }
 .pf-anima-tag.kuro   { background: #1d4ed8; }
 .pf-anima-tag.sora   { background: #0891b2; }
+.pf-anima-tag.hana   { background: #ec4899; }
 /* TikTok事業部 */
 .pf-anima-tag.maru   { background: #e11d48; }
 .pf-anima-tag.chiro  { background: #ea580c; }
 .pf-anima-tag.tama   { background: #ca8a04; }
 /* その他 */
+.pf-anima-tag.chisuke { background: #059669; }
+.pf-anima-tag.kazuyuki { background: #059669; }
 .pf-anima-tag.user   { background: #6b7280; }
 .pf-anima-tag.human  { background: #6b7280; }
 .pf-anima-tag.anima  { background: #374151; }
