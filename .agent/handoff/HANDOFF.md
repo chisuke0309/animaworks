@@ -1,150 +1,109 @@
-# HANDOFF — 2026-04-03 07:20
+# HANDOFF — 2026-04-04 14:22
 
 ## 使用ツール
-Claude Code (claude-opus-4-6)
+Claude Code (claude-sonnet-4-6)
 
 ---
 
 ## 今回のセッションで実施した内容
 
-### 1. TikTok事業部 Telegram重複送信問題の調査と修正
+### 1. cicchiからのWeek 2報告・Week 3方針の処理
 
-TikTok事業部（maru）からTelegramに何通も同じデータが送られる問題を調査。4つの原因を特定し対策を実施。
+- Week 2エンゲージメントサマリー確認（総imp 106、初like獲得 ⑰排尿観察）
+- **提案①（hanaへの指示権限拡大）**: hanaのX API権限を確認 → リプライ・引用RTは現在制限中のため実行不可。権限復帰後に改めて対応
+- **提案②（rueへのシリーズ企画委任）**: chisuke承認済み → UIから返答送信
 
-#### 原因1: activity_logの2重記録
-- Agent SDK側とToolHandler側の両方がログを書いていた
-- **修正**: `core/execution/_sdk_stream.py` で `mcp__aw__*` ツールのSDK側ログをスキップ
+### 2. TikTok投稿の視聴者目線改善
 
-#### 原因2: call_humanの重複送信
-- tamaが完成報告のバリエーションを何通もmaruに送信、maruが毎回call_humanで納品
-- **修正**: `core/tooling/handler_comms.py` に call_human デデュプ機構追加（同一subject 10分冷却）
+#### overlay_text品質ルール追加（tama/knowledge/carousel_production_rules.md）
+- 冒頭に「制作前に必ず問うこと」セクションを追加
+- ベネフィット軸テーブル（時短・コスト・不安解消・差をつける・便利）を明示
+- 専門用語（ARC-AGI-2・SWE-bench等）の一般語言い換えルールを明記
+- スライド1のNG/OK例を具体的に記載
 
-#### 原因3: maruの品質チェックが甘い
-- 不十分な成果物をそのまま納品 → ユーザーNG → 再制作ループ
-- **修正**: `maru/injection.md` に6項目の品質チェックリスト追加、不合格なら納品禁止に変更
+#### maruへのフィードバック
+- chisukeが「もっと視聴者目線で考えろ」とUIから直接メッセージ送信
+- maruが自律的に対応: feedback_insights.md・tiktok_strategy.md更新、chiro・tamaへ指示
+- tamaのcarousel_production_rules.mdにmaruが自ら「2026-04-04 制作ルール改訂」を書き込み（system-reminderで確認）
 
-#### 原因4: tamaの不要な自主報告
-- heartbeatで「blockedです」「修正待ちです」とmaruに報告 → inbox処理を誘発
-- **修正**: `tama/injection.md` に催促・状況報告の自主送信禁止ルール追加
+### 3. Telegram通知フォーマット修正
 
-### 2. X事業部との比較分析
+**[telegram.py:48](core/notification/channels/telegram.py)**
+- `(from maru)` 等のanima名サフィックスを削除（全anima共通）
 
-X事業部ではcall_human納品が禁止（pending→Web UI承認→cron自動投稿）。TikTok事業部の直接納品フローはこれはこれで育てる方針。
+**maru/procedures/carousel-content-pipeline.md・maru/injection.md**
+- `subject`の「【TikTok投稿】」プレフィックスを削除し、テーマタイトルのみにする指示を追記
 
-### 3. tamaモデル変更
-- tama を claude-haiku → claude-sonnet-4-6 に変更（chisukeが対応済み）
+### 4. yomi関連（前セッション継続・動作確認待ち）
+- 本日13:00巡回は activity_log で確認要
+- 本日20:00が改善版（全文取得・スコアリング・除外条件）の初回実行
 
-### 4. タスクキュー放置問題の調査と修正
-
-task_queue.jsonlにpending/blockedタスクが大量蓄積（rue 34件、kuro 42件等）。根本原因を調査し対策を実施。
-
-#### 根本原因
-1. タスク完了が100% LLM任せ（LLMが`update_task(status="done")`を呼ばなければ永遠に残る）
-2. auto-block（2時間）が行き止まり（blockedからの回復パスなし）
-3. `_anima_inbox.py` L207のバグ（`update_task()` → 正しくは `update_status()`）
-4. LLMが完了フラグを立てる意識がない
-
-#### 修正内容
-
-| Fix | ファイル | 内容 |
-|-----|---------|------|
-| バグ修正 | `core/_anima_inbox.py` | `update_task()` → `update_status()` |
-| 24時間自動完了 | `core/memory/task_queue.py` | `auto_resolve_old_tasks()` 追加 — 24時間更新なしで自動done |
-| JSONL圧縮 | `core/memory/task_queue.py` | `maybe_compact()` 追加 — 100行超えたら圧縮 |
-| heartbeat連携 | `core/_anima_heartbeat.py` | auto_resolve + compact をheartbeatから呼び出し |
-| 完了義務明記 | `cicchi/injection.md` | タスク完了フラグ（update_task done）の義務を追記 |
-| 完了義務明記 | `maru/injection.md` | 同上 |
-
-#### staleタスク手動クリーンアップ実施
-- rue: 34件、kuro: 42件、maru: 6件、chiro: 3件、tama: 16件 → 全てcompleted化
-
-### 5. パイプラインUI — TikTok事業部メンバーの名前タグ色修正
-- `server/static/styles/pipeline.css` にmaru/chiro/tamaのカラー定義が欠けていた
-- maru: ローズレッド、chiro: オレンジ、tama: アンバーを追加
-
-### 6. maruのcron自主修正
-- maruが04-04分の朝枠・夜枠を04-03に先行2本同時納品していた（設計意図外）
-- chisukeがmaruに直接チャットで「当日配信で」と指示
-- maruが自分でcron.mdを修正: 朝7時に朝枠、14時に夕方枠、20時にレビューのみ
-- 「翌日分の先行制作は行わない」を明記
-
-### 7. エンゲージメント担当(hana) + 社長時間予算の設計合意
-- 記事「Claude Codeで超優秀な8人部隊のX運用会社を作りました」から着想
-- X事業部にエンゲージメント専任Anima（hana）を追加する設計を合意
-- 社長の1日20-30分運用（朝夕ダイジェスト方式）も合意
-- 設計詳細: `~/.claude/projects/-Users-chisuke-Projects-animaworks/memory/project_engagement_design.md`
+---
 
 ## 未完了・次回の確認ポイント
 
-### hana実装（最優先・次セッションで着手）
-1. X APIツール実装（x_like, x_reply, x_quote）
-2. hana Anima作成（identity.md, injection.md, cron.md）— 業務目標は動的設定（knowledge/で管理）
-3. cicchiのinjection.mdにhanaの位置づけ + 導入意図を追記
-4. cicchiにsend_messageで「なぜエンゲージメント専任を入れたか」を伝達
-5. 社長時間予算（朝夕ダイジェスト）の実装
+### 本日20:00 yomi夜の巡回
+- 全文取得・おすすめ度・除外条件・応募文生成が正しく動くか確認
+- `grep "cron_task" ~/.animaworks/animas/yomi/activity_log/2026-04-04.jsonl`
 
-### TikTok事業部の動作確認
-- 次回の制作→品質チェック→納品フローで重複送信が解消されたか確認
-- call_humanデデュプがsuppressedを返した場合のmaruの挙動確認
+### TikTok投稿の品質変化確認
+- 本日17:00夕方枠（「まだChatGPT派？Sonnet 4.6が逆転した4つの数字」）が改訂ルール適用前に制作済み
+- 次回（4/5以降）の投稿からmaruの改訂指示が反映されるか確認
 
-### タスクキュー自動完了の動作確認
-- 24時間後に古いタスクが自動完了されるか確認
-- `grep "自動完了" ~/.animaworks/animas/*/activity_log/2026-04-04.jsonl`
-- maybe_compactが動作してJSONLが圧縮されるか確認
+### hana X API権限復帰確認
+- リプライ・引用RT権限が復帰したらcicchi提案①を実行
+- `cat ~/.animaworks/animas/hana/knowledge/x_api_permissions_status.md` で確認
 
-### パイプラインUIの動作確認（前々回から継続）
-- units.json + API + pipeline.jsのブラウザ動作確認
+### Knowledge Lint critical 2件（継続）
+- `tiktok_record_engagement` / `tiktok_get_performance` — maru/cron.md, maru/knowledge/feedback_insights.md
+- 存在しないツール名の参照。TikTok事業部のツール名修正が必要
 
-### Knowledge Lint — critical 2件（継続・false positive）
-- `from_person` — cicchi/identity.md説明文中の誤検知
-- `x_post_update_engagement` — 実装済みだがlint誤検知
+### 未コミット変更
+- `core/notification/channels/telegram.py` — (from anima)削除
+- `core/tools/crowdworks.py` — 全文取得対応（前セッションから）
+- `core/tools/notion.py` — 前セッションから継続
+- `core/supervisor/scheduler_manager.py` — 前セッションから継続
+- `server/routes/animas.py` — 前セッションから継続
+- `server/static/pages/animas.js` — 前セッションから継続
 
-### 未コミットファイル（大量蓄積中）
-- 修正12ファイル + 新規多数
+---
 
 ## 変更ファイル一覧
 
-| ファイル | 内容 |
-|---------|------|
-| `core/execution/_sdk_stream.py` | MCP内部ツールのactivity_log 2重記録防止 |
-| `core/tooling/handler_comms.py` | call_human デデュプ機構追加（10分冷却） |
-| `core/_anima_inbox.py` | update_task → update_status バグ修正 |
-| `core/memory/task_queue.py` | auto_resolve_old_tasks + maybe_compact 追加 |
-| `core/_anima_heartbeat.py` | heartbeatでauto_resolve + compact実行 |
-| `AGENTS.md` | スキル運用ルール追記（前々回） |
-| `core/tools/tiktok_content.py` | overlay_textsバリデーション強化（前々回） |
-| `core/tools/tiktok_image.py` | 猫キャラ合成追加（前々回） |
-| `server/routes/system.py` | `/api/system/units` エンドポイント（前々回） |
-| `server/static/pages/pipeline.js` | 事業部フィルタunits.json駆動（前々回） |
-| `server/static/workspace/modules/org-dashboard.js` | 組織ダッシュボード改善（前々回） |
-| `server/static/workspace/style.css` | ワークスペーススタイル（前々回） |
-| `~/.animaworks/animas/maru/injection.md` | 品質チェック強化 + タスク完了義務追記 |
-| `~/.animaworks/animas/tama/injection.md` | 自主報告抑制ルール追加 |
-| `~/.animaworks/animas/cicchi/injection.md` | タスク完了義務追記 |
-| `server/static/styles/pipeline.css` | TikTok事業部メンバーのタグ色追加 |
+| ファイル | 操作 | 内容 |
+|---------|------|------|
+| `core/notification/channels/telegram.py` | 変更 | `(from anima)`サフィックス削除 |
+| `~/.animaworks/animas/tama/knowledge/carousel_production_rules.md` | 変更 | 視聴者ベネフィット重視ルール追加（chisukeとmaruの両方から） |
+| `~/.animaworks/animas/maru/injection.md` | 変更 | subject指定・(from maru)削除指示追記 |
+| `~/.animaworks/animas/maru/procedures/carousel-content-pipeline.md` | 変更 | subject指定修正 |
+
+---
 
 ## モデル構成
 
-| anima | モデル | ロール | 事業部 |
-|-------|--------|--------|--------|
-| cicchi | claude-sonnet-4-6 | X事業部リーダー | X |
-| rue | claude-sonnet-4-6 | ニッチ調査 | X |
-| kuro | claude-haiku-4-5-20251001 | コンテンツ制作 | X |
-| sora | claude-haiku-4-5-20251001 | ビジュアル生成 | X |
-| maru | claude-sonnet-4-6 | TikTokリーダー | TikTok |
-| chiro | claude-haiku-4-5-20251001 | トレンド調査 | TikTok |
-| tama | claude-sonnet-4-6 | カルーセル制作 | TikTok |
+| anima | モデル | ロール | 事業部 | HBモード |
+|-------|--------|--------|--------|----------|
+| cicchi | claude-sonnet-4-6 | X事業部リーダー | X | scheduled 6-22 |
+| rue | claude-sonnet-4-6 | ニッチ調査 | X | inbox_only |
+| kuro | claude-haiku-4-5-20251001 | コンテンツ制作 | X | inbox_only |
+| sora | claude-haiku-4-5-20251001 | ビジュアル生成 | X | inbox_only |
+| hana | claude-haiku-4-5-20251001 | エンゲージメント | X | scheduled 9-21 |
+| maru | claude-sonnet-4-6 | TikTokリーダー | TikTok | scheduled 7-21 |
+| chiro | claude-haiku-4-5-20251001 | トレンド調査 | TikTok | scheduled 7-18 |
+| tama | claude-sonnet-4-6 | カルーセル制作 | TikTok | inbox_only |
+| yomi | claude-haiku-4-5-20251001 | 案件スカウト | CW事業部 | inbox_only (cron 13/20時) |
+| chisuke | — (人間) | オーナー | — | — |
 
 ---
 
 ## Knowledge Lint レポート
 
-**サマリ**: critical 2件, warning 3件（74ファイルスキャン）
+**サマリ**: critical 2件, warning 9件（117ファイルスキャン）
 
-### Critical Issues（両方false positive・継続）
-- **tool_name: `from_person`** — cicchi/identity.md説明文中の誤検知
-- **tool_name: `x_post_update_engagement`** — 実装済みだがlint誤検知
+### Critical Issues
+- **tool_name（2件）**: `tiktok_record_engagement` / `tiktok_get_performance` — maru/cron.md, maru/knowledge/feedback_insights.md（TikTok事業部の既存問題、今回の変更と無関係）
 
 ### Warning Issues
-- **char_limit（2件）**: 280文字制限の記述残存（content_creation_workflow.md, posting_rule.md）
-- **workflow（1件）**: rue/injection.md — 否定文の誤検知
+- **char_limit（3件）**: 280文字制限の記述残存（cicchi 2件, hana 1件）— スレッド文脈なので実質OK
+- **deprecated_term（5件）**: AIトレンド残存（maru 3件, chiro 2件）— TikTok事業部更新待ち
+- **workflow（1件）**: rue/injection.md — 否定文の誤検知（継続）

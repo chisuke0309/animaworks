@@ -40,8 +40,15 @@ def create_animas_router() -> APIRouter:
 
         config = load_config()
 
+        # Include all anima directories (even disabled ones like the owner)
+        all_names = set(anima_names)
+        if animas_dir.is_dir():
+            for d in animas_dir.iterdir():
+                if d.is_dir() and (d / "identity.md").exists():
+                    all_names.add(d.name)
+
         result = []
-        for name in anima_names:
+        for name in sorted(all_names):
             anima_dir = animas_dir / name
 
             # Get process status
@@ -474,6 +481,33 @@ def create_animas_router() -> APIRouter:
             "updated": {**updates, **({"heartbeat_mode": hb_mode} if hb_updated else {})},
             "reload": reload_result,
         }
+
+    # ── Identity / Profile ─────────────────────────────────
+
+    @router.get("/animas/{name}/identity")
+    async def get_anima_identity(name: str, request: Request):
+        """Read identity.md content for an anima."""
+        animas_dir = request.app.state.animas_dir
+        identity_path = animas_dir / name / "identity.md"
+        if not identity_path.exists():
+            raise HTTPException(status_code=404, detail=f"Identity not found: {name}")
+        content = identity_path.read_text(encoding="utf-8")
+        return {"name": name, "content": content}
+
+    @router.put("/animas/{name}/identity")
+    async def update_anima_identity(name: str, request: Request):
+        """Update identity.md content for an anima."""
+        animas_dir = request.app.state.animas_dir
+        anima_dir = animas_dir / name
+        if not anima_dir.exists():
+            raise HTTPException(status_code=404, detail=f"Anima not found: {name}")
+        body = await request.json()
+        content = body.get("content", "")
+        if not content.strip():
+            raise HTTPException(status_code=400, detail="Content cannot be empty")
+        identity_path = anima_dir / "identity.md"
+        identity_path.write_text(content, encoding="utf-8")
+        return {"name": name, "status": "saved"}
 
     # ── Reload Config ─────────────────────────────────────
 

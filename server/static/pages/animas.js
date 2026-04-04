@@ -306,6 +306,25 @@ async function _showDetail(name) {
       `;
     }
 
+    // Profile / Identity editor card
+    html += `
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>プロフィール (identity.md)</span>
+          <div style="display:flex; gap:0.5rem;">
+            <button id="profileEditBtn" class="btn-secondary" style="padding:0.25rem 0.75rem; font-size:0.8rem;">編集</button>
+            <button id="profileSaveBtn" class="btn-primary" style="padding:0.25rem 0.75rem; font-size:0.8rem; display:none;">保存</button>
+            <button id="profileCancelBtn" class="btn-secondary" style="padding:0.25rem 0.75rem; font-size:0.8rem; display:none;">キャンセル</button>
+            <span id="profileStatus" style="font-size:0.8rem; line-height:2;"></span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="profileView" style="max-height:400px; overflow-y:auto; white-space:pre-wrap; font-size:0.85rem; line-height:1.6; font-family:inherit;">${escapeHtml(detail.identity || "(なし)")}</div>
+          <textarea id="profileEditor" style="display:none; width:100%; min-height:400px; padding:0.75rem; border:1px solid var(--border, #ddd); border-radius:6px; font-size:0.85rem; line-height:1.6; font-family:monospace; resize:vertical;"></textarea>
+        </div>
+      </div>
+    `;
+
     // Action buttons
     html += `
       <div style="display:flex; gap:0.75rem;">
@@ -374,6 +393,62 @@ async function _showDetail(name) {
     hbModeEl?.addEventListener("change", saveHbConfig);
     hbStartEl?.addEventListener("change", saveHbConfig);
     hbEndEl?.addEventListener("change", saveHbConfig);
+
+    // Bind profile editor
+    {
+      const viewEl = document.getElementById("profileView");
+      const editorEl = document.getElementById("profileEditor");
+      const editBtn = document.getElementById("profileEditBtn");
+      const saveBtn = document.getElementById("profileSaveBtn");
+      const cancelBtn = document.getElementById("profileCancelBtn");
+      const statusEl = document.getElementById("profileStatus");
+
+      editBtn?.addEventListener("click", () => {
+        editorEl.value = detail.identity || "";
+        viewEl.style.display = "none";
+        editorEl.style.display = "block";
+        editBtn.style.display = "none";
+        saveBtn.style.display = "inline-block";
+        cancelBtn.style.display = "inline-block";
+      });
+
+      cancelBtn?.addEventListener("click", () => {
+        viewEl.style.display = "block";
+        editorEl.style.display = "none";
+        editBtn.style.display = "inline-block";
+        saveBtn.style.display = "none";
+        cancelBtn.style.display = "none";
+      });
+
+      saveBtn?.addEventListener("click", async () => {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "保存中...";
+        if (statusEl) statusEl.textContent = "";
+        try {
+          const resp = await fetch(`/api/animas/${encodeURIComponent(name)}/identity`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: editorEl.value }),
+          });
+          if (!resp.ok) throw new Error("Save failed");
+          detail.identity = editorEl.value;
+          viewEl.textContent = editorEl.value;
+          viewEl.style.display = "block";
+          editorEl.style.display = "none";
+          editBtn.style.display = "inline-block";
+          saveBtn.style.display = "none";
+          cancelBtn.style.display = "none";
+          if (statusEl) { statusEl.textContent = "✅ 保存しました"; statusEl.style.color = "#2a2"; }
+          setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+        } catch (err) {
+          if (statusEl) { statusEl.textContent = "❌ 保存に失敗しました"; statusEl.style.color = "#c22"; }
+          setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "保存";
+        }
+      });
+    }
 
     // Bind trigger button
     document.getElementById("animaDetailTrigger")?.addEventListener("click", async (e) => {

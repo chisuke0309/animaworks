@@ -45,10 +45,9 @@ class TelegramChannel(NotificationChannel):
             return "telegram: ERROR - chat_id not configured"
 
         prefix = f"[{priority.upper()}] " if priority in ("high", "urgent") else ""
-        sender = f" (from {anima_name})" if anima_name else ""
         safe_subject = html.escape(subject)
         safe_body = html.escape(body)
-        text = f"{prefix}<b>{safe_subject}</b>{sender}\n\n{safe_body}"
+        text = f"{prefix}<b>{safe_subject}</b>\n\n{safe_body}"
 
         url = f"{_TELEGRAM_API_BASE}/bot{token}/sendMessage"
         payload = {

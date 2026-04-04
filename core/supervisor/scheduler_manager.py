@@ -106,6 +106,15 @@ class SchedulerManager:
 
         active_start, active_end = parse_heartbeat_config(hb_content)
 
+        # inbox_only / off mode: skip heartbeat registration but allow cron tasks
+        if active_start == -1 and active_end == -1:
+            logger.info(
+                "Heartbeat '%s': DISABLED (inbox_only mode). "
+                "Skipping heartbeat job, cron tasks will be set up separately.",
+                self._anima_name,
+            )
+            return
+
         # Interval from config.json (not parsed from heartbeat.md)
         app_config = load_config()
         interval = app_config.heartbeat.interval_minutes
