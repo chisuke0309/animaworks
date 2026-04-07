@@ -228,6 +228,9 @@ class HeartbeatMixin:
 
             notification = ""
 
+            # ── Task queue maintenance (mandatory on every execution path) ──
+            # Heartbeat / Inbox / Cron すべての実行パスで 3関数をセットで実行する。
+            # 詳細は AGENTS.md「タスクキュー保守契約」参照。
             # Phase 1: Auto-block tasks stale for 2+ hours
             blocked = tq.auto_block_stale_tasks()
             if blocked:

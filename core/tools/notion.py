@@ -95,12 +95,30 @@ class NotionClient:
 
     # ── Create Page ───────────────────────────────────────
 
+    # DB別の必須フィールド（dashes除去済みUUID→必須プロパティ名リスト）
+    # クラウドワークス案件管理DBには おすすめ度 を必ず登録すること
+    _DB_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+        "2e31158c25dc814a9f1af021f2b7007d": ("案件名", "案件URL", "おすすめ度"),
+    }
+
     def create_page(
         self,
         database_id: str,
         properties: dict[str, Any],
     ) -> dict:
         """Create a page in a Notion database."""
+        # DB別必須フィールド検証
+        db_key = database_id.replace("-", "")
+        required = self._DB_REQUIRED_FIELDS.get(db_key)
+        if required:
+            # 接頭辞 "text:" などを除いた実際のキー名で判定
+            actual_keys = {k.split(":", 1)[-1] if ":" in k else k for k in properties}
+            missing = [k for k in required if k not in actual_keys]
+            if missing:
+                raise ValueError(
+                    f"Notion create_page: DB {database_id} は次のフィールドが必須です: "
+                    f"{missing}. 提供されたキー: {sorted(actual_keys)}"
+                )
         body = {
             "parent": {"database_id": database_id},
             "properties": self._build_properties(properties),
@@ -173,6 +191,21 @@ class NotionClient:
             else:
                 type_hint = None
                 real_key = key
+
+            # Skip None / empty values for types where empty is invalid
+            # (date/url/select cannot accept empty string — causes 400)
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                # empty string: skip for date/url/select/number; allow for text/title
+                if type_hint in ("date", "url", "select", "number"):
+                    continue
+                if type_hint is None and (
+                    real_key.endswith("日") or real_key.endswith("期限")
+                    or real_key.endswith("URL")
+                    or real_key in ("ステータス", "報酬形態", "カテゴリ")
+                ):
+                    continue
 
             if type_hint == "title" or (type_hint is None and real_key in ("案件名", "Name", "title")):
                 result[real_key] = {

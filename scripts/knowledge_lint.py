@@ -24,7 +24,22 @@ from typing import Optional
 
 ANIMA_BASE = Path(os.path.expanduser("~/.animaworks/animas"))
 SHARED_BASE = Path(os.path.expanduser("~/.animaworks/shared"))
-ANIMAS = ["cicchi", "kuro", "rue", "sora", "hana", "maru", "chiro", "tama"]
+
+def _load_anima_names() -> list[str]:
+    """config.json の animas セクションからAnima名一覧を動的に取得する。
+    config.json が存在しない場合はフォールバックリストを返す。
+    """
+    config_path = Path(os.path.expanduser("~/.animaworks/config.json"))
+    if config_path.exists():
+        cfg = json.loads(config_path.read_text(encoding="utf-8"))
+        # unit が null（human/ops）のエントリを除外し、実Animaのみ返す
+        return [
+            name for name, val in cfg.get("animas", {}).items()
+            if val.get("unit") is not None
+        ]
+    return ["cicchi", "kuro", "rue", "sora", "hana", "maru", "chiro", "tama"]
+
+ANIMAS = _load_anima_names()
 
 # スキャン対象（top-level md + knowledge/ + procedures/）
 TOP_LEVEL_FILES = ["identity.md", "injection.md", "cron.md", "permissions.md"]
@@ -54,16 +69,21 @@ VALID_TOOL_NAMES = {
     "x_post_thread", "x_post_save_pending", "x_post_execute_pending",
     "x_search", "x_user_tweets", "x_post_update_engagement",
     "x_like", "x_reply", "x_quote",
+    "tiktok_analytics",
+    # tiktok_analytics のアクション名（dispatch経由で呼ぶ）
+    "tiktok_scrape_engagement", "tiktok_get_performance", "tiktok_record_engagement",
 }
 
 # 廃止済み用語とその説明
-DEPRECATED_TERMS: dict[str, tuple[str, str]] = {
-    # (パターン, severity, 説明)
-    "x_post_request_approval": ("critical", "このツールは存在しない。x_post + cron自動投稿フローに移行済み"),
-    "x_post_cancel_pending": ("critical", "このツール名はコードに未実装"),
-    "4連投": ("critical", "長文単一投稿（X Premium 25,000文字）に移行済み"),
-    "AI・DX領域": ("warning", "ペット・グルーミング/エコ・サステナブルに移行済み（旧ミッション残留の可能性）"),
-    "AIトレンド": ("warning", "同上。ペット・グルーミング/エコ・サステナブルに移行済み"),
+# 形式: term -> (severity, 説明, applicable_animas or None)
+# applicable_animas=None のとき全Anima対象。リストを指定するとそのAnima配下のみ対象。
+DEPRECATED_TERMS: dict[str, tuple[str, str, list[str] | None]] = {
+    "x_post_request_approval": ("critical", "このツールは存在しない。x_post + cron自動投稿フローに移行済み", None),
+    "x_post_cancel_pending": ("critical", "このツール名はコードに未実装", None),
+    "4連投": ("critical", "長文単一投稿（X Premium 25,000文字）に移行済み", None),
+    # X事業部（cicchi/rue/kuro/sora/hana）のみ対象。TikTok事業部（maru/chiro/tama）はAI系ニッチを継続中。
+    "AI・DX領域": ("warning", "X事業部はペット・グルーミング/エコ・サステナブルに移行済み（旧ミッション残留の可能性）", ["cicchi", "rue", "kuro", "sora", "hana"]),
+    "AIトレンド": ("warning", "X事業部は同上。ペット・グルーミング/エコ・サステナブルに移行済み", ["cicchi", "rue", "kuro", "sora", "hana"]),
 }
 
 # ── データ構造 ─────────────────────────────────────────
@@ -306,7 +326,11 @@ def check_deprecated_terms(files: list[tuple[str, str, str]], report: LintReport
     for path, content, source in files:
         lines = content.split("\n")
         for line_no, line in enumerate(lines, 1):
-            for term, (severity, desc) in DEPRECATED_TERMS.items():
+            for term, (severity, desc, applicable_animas) in DEPRECATED_TERMS.items():
+                # applicable_animasが指定されている場合、対象Animaのファイルのみチェック
+                if applicable_animas is not None:
+                    if not any(f"/animas/{a}/" in path for a in applicable_animas):
+                        continue
                 if term in line:
                     # コメント行や「廃止」の説明として言及している場合はスキップ
                     if "廃止" in line or "旧:" in line or "deprecated" in line.lower():
@@ -327,6 +351,252 @@ def check_deprecated_terms(files: list[tuple[str, str, str]], report: LintReport
                         files=[{"path": path, "line": line_no, "snippet": line.strip()[:100]}],
                         suggestion=f"この用語を削除または現行の表現に更新する",
                     ))
+
+
+def _parse_goals_md() -> dict:
+    """goals.mdを解析してunit別の要件を返す。
+
+    Returns:
+        {
+            "x": {
+                "label": "X事業部",
+                "lead": "cicchi",
+                "post_hours": [8, 17],
+                "genre_keywords": ["ペット", "グルーミング", ...],
+                "forbidden_themes": ["副業", ...],
+                "weekly_check": {"anima": "rue", "hour": 8},
+            },
+            "tiktok": { ... },
+        }
+    """
+    goals_path = Path(os.path.expanduser("~/.animaworks/common_knowledge/organization/goals.md"))
+    if not goals_path.exists():
+        return {}
+
+    content = goals_path.read_text(encoding="utf-8")
+    units: dict = {}
+
+    # <!-- unit:xxx --> マーカーでセクション分割
+    unit_pattern = re.compile(r'<!-- unit:(\w+) -->(.*?)(?=<!-- unit:|\Z)', re.DOTALL)
+    for m in unit_pattern.finditer(content):
+        unit_id = m.group(1)
+        sec = m.group(2)
+
+        # ラベル（## X事業部 / ## TikTok事業部）
+        label_m = re.search(r'^## (.+)', sec, re.MULTILINE)
+        label = label_m.group(1).strip() if label_m else unit_id
+
+        # 投稿頻度行から時刻を抽出: "1日2回（朝8時・夕17時）"
+        post_hours: list[int] = []
+        for freq_line in sec.split('\n'):
+            if '投稿頻度' in freq_line or '投稿時刻' in freq_line:
+                post_hours = [int(h) for h in re.findall(r'(\d+)時', freq_line) if 0 <= int(h) <= 23]
+                break
+
+        # ジャンル行からキーワードを抽出
+        genre_keywords: list[str] = []
+        for line in sec.split('\n'):
+            if 'ジャンル' in line and ':' in line:
+                raw = line.split(':', 1)[1].strip()
+                # マークダウン強調を除去
+                raw = re.sub(r'\*\*|\`', '', raw)
+                genre_keywords = [k.strip() for k in re.split(r'[/・＋、,\s]+', raw) if k.strip()]
+                break
+
+        # 禁止テーマ行から抽出
+        forbidden_themes: list[str] = []
+        for line in sec.split('\n'):
+            if '禁止テーマ' in line and ':' in line:
+                raw = line.split(':', 1)[1].strip()
+                raw = re.sub(r'\*\*|\`', '', raw)
+                # "副業・稼ぎ方系（AI副業、月○万等）" のような形式を整形
+                raw = re.sub(r'（[^）]*）', '', raw)
+                forbidden_themes = [k.strip() for k in re.split(r'[/・、,\s]+', raw) if k.strip()]
+                break
+
+        # 週次チェック行: "rueが毎週月曜8時に確認"
+        weekly_check: dict | None = None
+        for line in sec.split('\n'):
+            if '週次チェック' in line:
+                a_m = re.search(r'(\w+)が毎週', line)
+                h_m = re.search(r'(\d+)時', line)
+                if a_m and h_m:
+                    weekly_check = {"anima": a_m.group(1), "hour": int(h_m.group(1))}
+                    break
+
+        units[unit_id] = {
+            "label": label,
+            "post_hours": post_hours,
+            "genre_keywords": genre_keywords,
+            "forbidden_themes": forbidden_themes,
+            "weekly_check": weekly_check,
+        }
+
+    return units
+
+
+def _parse_cron_schedules(cron_path: Path) -> list[dict]:
+    """cron.mdから schedule: エントリを解析する。"""
+    if not cron_path.exists():
+        return []
+    schedules = []
+    for m in re.finditer(
+        r'^schedule:\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)',
+        cron_path.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    ):
+        minute, hour, dom, month, dow = m.groups()
+        schedules.append({"minute": minute, "hour": hour, "dom": dom, "month": month, "dow": dow})
+    return schedules
+
+
+def _has_hour(schedules: list[dict], hour: int) -> bool:
+    """指定時刻（時）のスケジュールが存在するか。"""
+    return any(s["hour"] == str(hour) for s in schedules)
+
+
+def _has_weekly_at_hour(schedules: list[dict], hour: int) -> bool:
+    """指定時刻の月曜定期スケジュールが存在するか。"""
+    for s in schedules:
+        if s["hour"] == str(hour):
+            # dow が 1 または 1 を含むカンマ区切り
+            dow_parts = s["dow"].replace(" ", "").split(",")
+            if "1" in dow_parts or s["dow"] == "*":
+                return True
+    return False
+
+
+def _load_unit_config() -> dict:
+    """config.json の unit フィールドから unit→anima一覧・リードを動的に構築する。
+
+    Returns:
+        {
+            "x":      {"members": ["cicchi", "rue", ...], "lead": "cicchi"},
+            "tiktok": {"members": ["maru", "chiro", "tama"], "lead": "maru"},
+        }
+    """
+    config_path = Path(os.path.expanduser("~/.animaworks/config.json"))
+    if not config_path.exists():
+        return {}
+
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    animas = cfg.get("animas", {})
+
+    units: dict = {}
+    for name, val in animas.items():
+        unit_id = val.get("unit")
+        if not unit_id:
+            continue
+        if unit_id not in units:
+            units[unit_id] = {"members": [], "lead": None}
+        units[unit_id]["members"].append(name)
+        # supervisor が null（＝自律リーダー）かつ unit が一致 → リード
+        if val.get("supervisor") is None:
+            units[unit_id]["lead"] = name
+
+    return units
+
+
+def check_org_goals_alignment(_files: list[tuple[str, str, str]], report: LintReport):
+    """組織目標(goals.md)と各Animaの設定ファイルの整合性チェック。
+
+    チェック項目:
+      1. 必須投稿スケジュール — goals.mdの投稿時刻がリードAnimaのcron.mdに存在するか
+      2. 週次チェックcron    — goals.md指定の担当Animaに月曜スケジュールがあるか
+      3. ジャンルキーワード  — goals.mdのジャンルがリードAnimaのinjection.mdに反映されているか
+      4. 禁止テーマの明記   — goals.mdの禁止テーマがinjection/identity.mdに記載されているか
+    """
+    units = _parse_goals_md()
+    if not units:
+        return  # goals.md が存在しない場合はスキップ
+
+    # config.json からunit構成を動的に取得
+    unit_config = _load_unit_config()
+
+    for unit_id, unit in units.items():
+        label = unit["label"]
+        # リードAnimaは config.json の unit フィールド + supervisor=null から自動解決
+        lead = unit_config.get(unit_id, {}).get("lead")
+
+        # ── 1. 投稿スケジュールチェック ──────────────────────────────
+        if lead and unit["post_hours"]:
+            cron_path = ANIMA_BASE / lead / "cron.md"
+            schedules = _parse_cron_schedules(cron_path)
+            for hour in unit["post_hours"]:
+                if not _has_hour(schedules, hour):
+                    report.add(Issue(
+                        severity="warning",
+                        category="org_alignment",
+                        message=f"[{label}] goals.md必須の{hour}時投稿が {lead}/cron.md に未定義",
+                        files=[{"path": str(cron_path), "line": 0,
+                                "snippet": f"schedule: 0 {hour} * * * が見当たらない"}],
+                        suggestion=f"goals.mdの投稿頻度に合わせて cron.md に `schedule: 0 {hour} * * *` を追加する",
+                    ))
+
+        # ── 2. 週次チェックcronチェック ──────────────────────────────
+        wc = unit.get("weekly_check")
+        if wc:
+            wc_anima, wc_hour = wc["anima"], wc["hour"]
+            wc_cron = ANIMA_BASE / wc_anima / "cron.md"
+            wc_schedules = _parse_cron_schedules(wc_cron)
+            if not _has_weekly_at_hour(wc_schedules, wc_hour):
+                report.add(Issue(
+                    severity="warning",
+                    category="org_alignment",
+                    message=f"[{label}] goals.md指定の週次チェック（{wc_anima} 月曜{wc_hour}時）が cron.md に未定義",
+                    files=[{"path": str(wc_cron), "line": 0,
+                            "snippet": f"schedule: 0 {wc_hour} * * 1 が見当たらない"}],
+                    suggestion=f"{wc_anima}/cron.md に `schedule: 0 {wc_hour} * * 1` を追加する",
+                ))
+
+        # ── 3. ジャンルキーワード整合チェック ────────────────────────
+        # injection.md + identity.md の両方を検索対象とする
+        if lead and unit["genre_keywords"]:
+            check_for_genre = [
+                ANIMA_BASE / lead / "injection.md",
+                ANIMA_BASE / lead / "identity.md",
+            ]
+            genre_combined = " ".join(
+                p.read_text(encoding="utf-8") for p in check_for_genre if p.exists()
+            )
+            found = [k for k in unit["genre_keywords"] if k in genre_combined]
+            if not found:
+                kws = "、".join(unit["genre_keywords"][:4])
+                injection_path = ANIMA_BASE / lead / "injection.md"
+                report.add(Issue(
+                    severity="warning",
+                    category="org_alignment",
+                    message=f"[{label}] goals.mdのジャンルキーワード（{kws}…）が {lead}/injection.md・identity.md に見当たらない",
+                    files=[{"path": str(injection_path), "line": 0,
+                            "snippet": f"期待キーワード: {kws}"}],
+                    suggestion="injection.mdまたはidentity.mdにジャンル・ニッチ情報を明記する",
+                ))
+
+        # ── 4. 禁止テーマの明記チェック ──────────────────────────────
+        if lead and unit["forbidden_themes"]:
+            check_paths = [
+                ANIMA_BASE / lead / "injection.md",
+                ANIMA_BASE / lead / "identity.md",
+            ]
+            found_prohibition = False
+            for cp in check_paths:
+                if not cp.exists():
+                    continue
+                cp_content = cp.read_text(encoding="utf-8")
+                if any(t in cp_content for t in unit["forbidden_themes"]) and \
+                   any(w in cp_content for w in ["禁止", "NG", "やらない", "扱わない"]):
+                    found_prohibition = True
+                    break
+            if not found_prohibition:
+                themes = "、".join(unit["forbidden_themes"][:3])
+                report.add(Issue(
+                    severity="info",
+                    category="org_alignment",
+                    message=f"[{label}] goals.mdの禁止テーマ（{themes}）の明示的禁止ルールが injection/identity.md に未記載",
+                    files=[{"path": str(ANIMA_BASE / lead / "injection.md"), "line": 0,
+                            "snippet": f"禁止テーマ: {themes}"}],
+                    suggestion="injection.mdまたはidentity.mdに禁止テーマを明記する",
+                ))
 
 
 def check_workflow_consistency(files: list[tuple[str, str, str]], report: LintReport):
@@ -429,6 +699,7 @@ def run_lint(anima_filter: Optional[str] = None) -> LintReport:
     check_format_rules(files, report)
     check_deprecated_terms(files, report)
     check_workflow_consistency(files, report)
+    check_org_goals_alignment(files, report)
 
     report.issues = deduplicate_issues(report.issues)
 

@@ -166,9 +166,9 @@ class InboxMixin:
                             self.name, exc_info=True,
                         )
 
-                    # Auto-block long-stale tasks before LLM runs so the system
-                    # prompt reflects idle (not stuck) state for the cycle.
-                    # This handles the case where inbox arrives before heartbeat.
+                    # ── Task queue maintenance (mandatory on every execution path) ──
+                    # Heartbeat / Inbox / Cron すべての実行パスで 3関数をセットで実行する。
+                    # 詳細は AGENTS.md「タスクキュー保守契約」参照。
                     try:
                         from core.memory.task_queue import TaskQueueManager as _InboxTQM
                         _itq = _InboxTQM(self.anima_dir)
@@ -186,6 +186,13 @@ class InboxMixin:
                                 "[%s] inbox: auto-blocked %d stale task(s)",
                                 self.name, len(_inbox_blocked),
                             )
+                        _inbox_resolved = _itq.auto_resolve_old_tasks()
+                        if _inbox_resolved:
+                            logger.info(
+                                "[%s] inbox: auto-resolved %d old task(s)",
+                                self.name, len(_inbox_resolved),
+                            )
+                        _itq.maybe_compact()
                     except Exception:
                         logger.debug(
                             "[%s] inbox: failed to auto-block stale tasks",

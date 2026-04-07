@@ -380,6 +380,26 @@ class LifecycleMixin:
                     task_name, description, command_output=command_output,
                 )
 
+                # ── Task queue maintenance (mandatory on every execution path) ──
+                # Heartbeat / Inbox / Cron すべての実行パスで auto_resolve +
+                # maybe_compact を実行する。詳細は AGENTS.md「タスクキュー保守契約」参照。
+                try:
+                    from core.memory.task_queue import TaskQueueManager as _CronTQM
+                    _ctq = _CronTQM(self.anima_dir)
+                    _ctq.auto_block_stale_tasks()
+                    _cron_resolved = _ctq.auto_resolve_old_tasks()
+                    if _cron_resolved:
+                        logger.info(
+                            "[%s] cron: auto-resolved %d old task(s)",
+                            self.name, len(_cron_resolved),
+                        )
+                    _ctq.maybe_compact()
+                except Exception:
+                    logger.debug(
+                        "[%s] cron: task queue maintenance failed",
+                        self.name, exc_info=True,
+                    )
+
                 try:
                     result = await self.agent.run_cycle(
                         prompt, trigger=f"cron:{task_name}"

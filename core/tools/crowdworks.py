@@ -125,7 +125,7 @@ def _parse_job(entry: dict) -> dict[str, Any]:
 
     pay_type, pay_min, pay_max = _parse_payment(payment)
 
-    return {
+    job = {
         "id": jo.get("id"),
         "title": jo.get("title", ""),
         "description": _fetch_job_description(jo.get("id")) or jo.get("description_digest", ""),
@@ -141,6 +141,160 @@ def _parse_job(entry: dict) -> dict[str, Any]:
         "client_name": client.get("username", ""),
         "client_certified": client.get("is_employer_certification", False),
     }
+    score, breakdown = score_job(job)
+    job["score"] = score
+    job["score_breakdown"] = breakdown
+    return job
+
+
+# ── Scoring ────────────────────────────────────────────────
+
+# chisukeの強みキーワード（スキルマッチ判定用）
+_SKILL_KEYWORDS = ("AI", "DX", "SEO", "ディレクション", "Notion", "Python", "IT", "生成AI")
+# 専門外ジャンル（上書きで3点）
+_OFF_TOPIC_KEYWORDS = ("美容", "看護", "旅行", "コーヒー", "医療", "介護", "ファッション", "料理")
+# 継続性キーワード
+_CONTINUITY_KEYWORDS = ("継続", "長期", "専属", "月5本", "月10本", "月20本", "月〜本")
+# AI利用OKキーワード
+_AI_OK_KEYWORDS = ("AI活用", "生成AI", "AIツール", "AI使用OK", "ChatGPT", "Claude")
+# 除外キーワード（スコア0）
+_EXCLUDE_KEYWORDS = (
+    "ミーティング", "web面談", "Web面談", "zoom", "Zoom", "ZOOM",
+    "meet", "Meet", "面談", "出社", "通勤", "来社",
+    "業務経験", "実務経験", "経験者", "経験必須",
+)
+
+
+def _days_until(deadline: str) -> int | None:
+    """Days from today until deadline (YYYY-MM-DD). None if unparseable."""
+    if not deadline:
+        return None
+    try:
+        from datetime import date, datetime
+        d = datetime.strptime(deadline[:10], "%Y-%m-%d").date()
+        return (d - date.today()).days
+    except Exception:
+        return None
+
+
+def score_job(job: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """Compute おすすめ度 (0-80) for a job.
+
+    Returns (score, breakdown) where breakdown details each component.
+    Scoring matches yomi/injection.md spec exactly.
+    """
+    title = job.get("title", "") or ""
+    desc = job.get("description", "") or ""
+    text = f"{title} {desc}"
+    budget_type = job.get("budget_type", "") or ""
+    budget_max = job.get("budget_max") or 0
+    applicants = job.get("applicants", 0) or 0
+    deadline = job.get("deadline", "") or ""
+
+    # 除外条件チェック
+    excluded_by: list[str] = [kw for kw in _EXCLUDE_KEYWORDS if kw in text]
+    if excluded_by:
+        return 0, {
+            "total": 0,
+            "excluded": True,
+            "excluded_by": excluded_by,
+        }
+
+    # 1. 報酬単価 (最大15点)
+    if budget_type == "時給":
+        if budget_max >= 2000:
+            payment_pts = 15
+        elif budget_max >= 1500:
+            payment_pts = 10
+        else:
+            payment_pts = 5
+    else:  # 固定/タスク/コンペ/その他
+        if budget_max >= 30000:
+            payment_pts = 15
+        elif budget_max >= 10000:
+            payment_pts = 10
+        elif budget_max >= 5000:
+            payment_pts = 7
+        elif budget_max >= 2000:
+            payment_pts = 4
+        else:
+            payment_pts = 1
+
+    # 2. 競合少なさ (最大15点)
+    if applicants <= 5:
+        competition_pts = 15
+    elif applicants <= 15:
+        competition_pts = 10
+    elif applicants <= 30:
+        competition_pts = 6
+    elif applicants <= 50:
+        competition_pts = 3
+    else:
+        competition_pts = 0
+
+    # 3. スキルマッチ (最大20点)
+    off_topic = any(kw in text for kw in _OFF_TOPIC_KEYWORDS)
+    if off_topic:
+        skill_pts = 3
+    else:
+        matches = sum(1 for kw in _SKILL_KEYWORDS if kw in text)
+        if matches >= 3:
+            skill_pts = 20
+        elif matches == 2:
+            skill_pts = 15
+        elif matches == 1:
+            skill_pts = 10
+        else:
+            skill_pts = 5
+    if ("AI禁止" in text) or ("人間執筆必須" in text):
+        skill_pts = max(0, skill_pts - 5)
+
+    # 4. 継続性 (最大10点)
+    continuity_pts = 10 if any(kw in text for kw in _CONTINUITY_KEYWORDS) else 0
+
+    # 5. 応募期限余裕 (最大10点)
+    days = _days_until(deadline)
+    if days is None:
+        deadline_pts = 0
+    elif days >= 10:
+        deadline_pts = 10
+    elif days >= 5:
+        deadline_pts = 6
+    elif days >= 2:
+        deadline_pts = 3
+    else:
+        deadline_pts = 0
+
+    # 6. AI利用OK (最大10点)
+    ai_ok = any(kw in text for kw in _AI_OK_KEYWORDS) and "AI禁止" not in text
+    ai_pts = 10 if ai_ok else 0
+
+    total = (
+        payment_pts + competition_pts + skill_pts
+        + continuity_pts + deadline_pts + ai_pts
+    )
+    breakdown = {
+        "total": total,
+        "excluded": False,
+        "payment": payment_pts,
+        "competition": competition_pts,
+        "skill": skill_pts,
+        "continuity": continuity_pts,
+        "deadline": deadline_pts,
+        "ai_ok": ai_pts,
+    }
+    return total, breakdown
+
+
+def score_level(score: int) -> str:
+    """Return ★ level string for a score."""
+    if score == 0:
+        return "除外"
+    if score >= 55:
+        return "★★★"
+    if score >= 40:
+        return "★★"
+    return "★"
 
 
 def search_jobs(

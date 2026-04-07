@@ -23,6 +23,7 @@ EXECUTION_PROFILE: dict[str, dict[str, object]] = {
     "tiktok_record_engagement": {"expected_seconds": 5, "background_eligible": False},
     "tiktok_weekly_report": {"expected_seconds": 10, "background_eligible": False},
     "tiktok_get_performance": {"expected_seconds": 5, "background_eligible": False},
+    "tiktok_scrape_engagement": {"expected_seconds": 60, "background_eligible": False},
 }
 
 # ── Tool Schemas ──────────────────────────────────────────
@@ -87,6 +88,28 @@ def get_tool_schemas() -> list[dict]:
                 "required": [],
             },
         },
+        {
+            "name": "tiktok_scrape_engagement",
+            "description": (
+                "TikTok Studioからエンゲージメントデータを自動スクレイピングする。"
+                "Playwrightで認証済みCookieを使いContentページから各指標を取得し記録する。"
+                "cron command経由での自動実行を想定。"
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "cookie_path": {
+                        "type": "string",
+                        "description": "Cookie JSONファイルのパス（省略時: ~/.animaworks/credentials/tiktok_cookies.json）",
+                    },
+                    "max_posts": {
+                        "type": "integer",
+                        "description": "取得する最大投稿数（デフォルト20）",
+                    },
+                },
+                "required": [],
+            },
+        },
     ]
 
 
@@ -118,6 +141,15 @@ def _load_records(db_path: Path) -> list[dict]:
         except json.JSONDecodeError:
             pass
     return records
+
+
+def _is_duplicate(db_path: Path, tiktok_url: str, today: str) -> bool:
+    """Check if this URL was already recorded today."""
+    for r in _load_records(db_path):
+        if (r.get("tiktok_url") == tiktok_url
+                and r.get("recorded_at", "").startswith(today)):
+            return True
+    return False
 
 
 # ── Implementation ────────────────────────────────────────
@@ -233,6 +265,94 @@ def get_performance(limit: int = 10, anima_dir: str | None = None) -> dict:
     }
 
 
+def scrape_engagement(args: dict, anima_dir: str | None = None) -> dict:
+    """Scrape engagement data from TikTok Studio using Playwright."""
+    max_posts = args.get("max_posts", 20)
+    cookie_path = args.get("cookie_path")
+
+    try:
+        from core.tools._tiktok_scraper import (
+            load_cookies, validate_cookies, scrape_tiktok_studio,
+            CookieNotFoundError, CookieExpiredError, PageStructureError,
+            DEFAULT_COOKIE_PATH,
+        )
+    except ImportError:
+        return {
+            "success": False,
+            "error": "dependency_missing",
+            "message": "playwright未インストール: pip install playwright && playwright install chromium",
+        }
+
+    # Load and validate cookies
+    cpath = Path(cookie_path) if cookie_path else DEFAULT_COOKIE_PATH
+    try:
+        cookies = load_cookies(cpath)
+        if not validate_cookies(cookies):
+            return {
+                "success": False,
+                "error": "cookie_expired",
+                "message": "TikTok Cookieが期限切れです。Chrome拡張でCookieを再エクスポートしてください。",
+            }
+    except CookieNotFoundError:
+        return {
+            "success": False,
+            "error": "cookie_not_found",
+            "message": f"Cookieファイルが見つかりません: {cpath}",
+        }
+
+    # Scrape with retry
+    db_path = _get_engagement_db(anima_dir)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    for attempt in range(2):
+        try:
+            posts = scrape_tiktok_studio(cookies, max_posts=max_posts)
+            break
+        except CookieExpiredError as e:
+            return {
+                "success": False,
+                "error": "cookie_expired",
+                "message": f"セッション切れ: {e}",
+            }
+        except PageStructureError as e:
+            logger.error("TikTok Studio page structure changed: %s", e)
+            return {
+                "success": False,
+                "error": "page_structure_changed",
+                "message": f"ページ構造変更検出: {e}",
+            }
+        except Exception as e:
+            if attempt == 0:
+                logger.warning("Scrape attempt 1 failed, retrying: %s", e)
+                import time as _time
+                _time.sleep(5)
+            else:
+                return {
+                    "success": False,
+                    "error": "network_error",
+                    "message": f"スクレイピング失敗（リトライ済み）: {e}",
+                }
+
+    # Record each post (with dedup)
+    recorded = 0
+    skipped = 0
+    for post in posts:
+        url = post.get("tiktok_url", "")
+        if url and _is_duplicate(db_path, url, today):
+            skipped += 1
+            continue
+        record_engagement(post, anima_dir=anima_dir)
+        recorded += 1
+
+    return {
+        "success": True,
+        "message": f"スクレイピング完了: {recorded}件記録, {skipped}件スキップ（重複）",
+        "recorded": recorded,
+        "skipped": skipped,
+        "total_scraped": len(posts),
+    }
+
+
 def _update_feedback_knowledge(anima_dir: str) -> None:
     """Update feedback_insights in knowledge based on accumulated data."""
     db_path = _get_engagement_db(anima_dir)
@@ -287,5 +407,8 @@ def dispatch(name: str, args: dict[str, Any]) -> Any:
             limit=args.get("limit", 10),
             anima_dir=anima_dir,
         )
+
+    if name == "tiktok_scrape_engagement":
+        return scrape_engagement(args, anima_dir=anima_dir)
 
     raise ValueError(f"Unknown tool: {name}")
