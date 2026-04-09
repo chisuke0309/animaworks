@@ -161,6 +161,15 @@ def find_animas_with_missing_assets(
             continue
         if not (anima_dir / "identity.md").exists():
             continue
+        status_file = anima_dir / "status.json"
+        if status_file.exists():
+            try:
+                import json as _json
+                _status = _json.loads(status_file.read_text())
+                if not _status.get("enabled", True):
+                    continue
+            except Exception:
+                pass
         result = check_anima_assets(anima_dir, enable_3d=enable_3d)
         if not result["complete"]:
             results.append((anima_dir.name, result))
@@ -193,6 +202,18 @@ async def reconcile_anima_assets(
         Dict with generation results or skip reason.
     """
     anima_name = anima_dir.name
+
+    # Skip disabled animas (e.g. human-only profiles)
+    status_file = anima_dir / "status.json"
+    if status_file.exists():
+        try:
+            import json as _json
+            _status = _json.loads(status_file.read_text())
+            if not _status.get("enabled", True):
+                return {"anima": anima_name, "skipped": True, "reason": "disabled"}
+        except Exception:
+            pass
+
     lock = _get_lock(anima_name)
 
     # Check failure cooldown before acquiring lock

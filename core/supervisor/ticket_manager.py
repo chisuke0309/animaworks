@@ -146,7 +146,8 @@ class TicketManager:
         """Check if an Anima has any unresolved outbox tickets.
 
         Used by _is_heartbeat_idle() to prevent idle skip while
-        waiting for replies.
+        waiting for replies.  Reports (intent=report) are excluded
+        because they don't require a response from the recipient.
         """
         outbox_dir = outbox_root / anima_name
         if not outbox_dir.exists():
@@ -154,7 +155,7 @@ class TicketManager:
         for fp in outbox_dir.glob("*.ticket.json"):
             try:
                 ticket = json.loads(fp.read_text(encoding="utf-8"))
-                if ticket.get("status") == STATUS_PENDING:
+                if ticket.get("status") == STATUS_PENDING and ticket.get("intent") != "report":
                     return True
             except (json.JSONDecodeError, OSError):
                 continue
@@ -206,10 +207,22 @@ class TicketManager:
                 if status == STATUS_PENDING:
                     elapsed = now - created_at
                     if elapsed > _PICKUP_TIMEOUT_SEC:
+                        to_name = ticket.get("to", "?")
+                        intent = ticket.get("intent", "")
+                        # Skip alert for reports — they don't require a
+                        # reply, so late pickup is not actionable.
+                        # Skip alert if recipient is a real human (disabled anima)
+                        if intent == "report" or self._is_human(to_name):
+                            ticket["status"] = STATUS_TIMEOUT
+                            fp.write_text(
+                                json.dumps(ticket, ensure_ascii=False, indent=2),
+                                encoding="utf-8",
+                            )
+                            continue
                         alerts.append({
                             "type": "pickup_timeout",
                             "from": anima_name,
-                            "to": ticket.get("to", "?"),
+                            "to": to_name,
                             "message_id": ticket.get("message_id", "?"),
                             "elapsed_min": round(elapsed / 60, 1),
                             "preview": ticket.get("content_preview", "")[:100],
@@ -235,6 +248,23 @@ class TicketManager:
         # Send alerts
         for alert in alerts:
             await self._send_alert(alert)
+
+    def _is_human(self, anima_name: str) -> bool:
+        """Return True if the anima is a disabled real-human account.
+
+        Checks ``~/.animaworks/animas/<name>/status.json`` for ``enabled: false``.
+        Human accounts (chisuke, tomo, etc.) are disabled so they never run
+        as AI agents — messages to them are read by the real owner via Telegram
+        and should not trigger pickup-timeout alerts.
+        """
+        status_path = (
+            Path.home() / ".animaworks" / "animas" / anima_name / "status.json"
+        )
+        try:
+            status = json.loads(status_path.read_text(encoding="utf-8"))
+            return not status.get("enabled", True)
+        except (json.JSONDecodeError, OSError):
+            return False
 
     async def _send_alert(self, alert: dict[str, Any]) -> None:
         """Send a Telegram notification for a timed-out ticket."""

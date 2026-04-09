@@ -442,7 +442,7 @@ class InboxMixin:
 
         for item in inbox_items:
             m = item.msg
-            content_text = m.content[:800]
+            content_text = m.content[:2000]
 
             # Detect and log injection attempts in incoming messages
             _inj = detect_injection(content_text)
@@ -467,7 +467,7 @@ class InboxMixin:
         # Deferred messages (no InboxItem) are appended without counter
         for m in messages:
             if not any(item.msg is m for item in inbox_items):
-                content_text = m.content[:800]
+                content_text = m.content[:2000]
                 _inj = detect_injection(content_text)
                 if _inj:
                     content_text = (

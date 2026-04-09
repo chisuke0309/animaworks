@@ -405,9 +405,11 @@ NOTIFICATION_TOOLS: list[dict[str, Any]] = [
                     "description": "通知の優先度（デフォルト: normal）",
                 },
                 "attachments": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "添付する画像ファイルのパス一覧（Telegramに画像として送信される）",
+                    "anyOf": [
+                        {"type": "array", "items": {"type": "string"}},
+                        {"type": "string"},
+                    ],
+                    "description": "添付する画像ファイルのパス一覧（Telegramに画像として送信される）。JSON配列またはJSON文字列で指定可能。",
                 },
             },
             "required": ["subject", "body"],

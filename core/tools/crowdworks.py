@@ -149,20 +149,74 @@ def _parse_job(entry: dict) -> dict[str, Any]:
 
 # ── Scoring ────────────────────────────────────────────────
 
-# chisukeの強みキーワード（スキルマッチ判定用）
-_SKILL_KEYWORDS = ("AI", "DX", "SEO", "ディレクション", "Notion", "Python", "IT", "生成AI")
-# 専門外ジャンル（上書きで3点）
-_OFF_TOPIC_KEYWORDS = ("美容", "看護", "旅行", "コーヒー", "医療", "介護", "ファッション", "料理")
+# ライティング系案件の判定キーワード（報酬評価を切り替える）
+_WRITING_JOB_KEYWORDS = (
+    "ライティング", "ライター", "記事作成", "記事執筆", "ブログ", "コラム", "執筆", "文章作成",
+    "コピーライター", "コンテンツ制作", "レポート", "レビュー記事", "口コミ記事",
+)
+# IT系案件の判定キーワード（報酬評価を切り替える）
+_IT_JOB_KEYWORDS = (
+    "Python", "システム開発", "プログラム", "エンジニア", "開発", "実装", "コーディング",
+    "DX推進", "コンサルティング", "PMO", "要件定義",
+)
+# chisukeチームの強みキーワード（スキルマッチ判定用）
+# 夫: AI/DX/IT/Notion/Python系、妻: ライフスタイル/美容/料理/旅行/グルメ系
+_SKILL_KEYWORDS = (
+    "AI", "DX", "SEO", "ディレクション", "Notion", "Python", "IT", "生成AI",
+    "ライフスタイル", "美容", "料理", "旅行", "グルメ", "レビュー", "口コミ",
+    "ブログ", "コラム", "記事", "ライティング",
+)
+# 専門職系（資格・免許が必要な専門外ジャンル）— 上書きで3点
+_OFF_TOPIC_KEYWORDS = ("看護", "医療", "介護")
 # 継続性キーワード
 _CONTINUITY_KEYWORDS = ("継続", "長期", "専属", "月5本", "月10本", "月20本", "月〜本")
 # AI利用OKキーワード
-_AI_OK_KEYWORDS = ("AI活用", "生成AI", "AIツール", "AI使用OK", "ChatGPT", "Claude")
-# 除外キーワード（スコア0）
+_AI_OK_KEYWORDS = ("AI活用", "生成AI", "AIツール", "AI使用OK", "ChatGPT", "Claude", "Gemini")
+# 除外キーワード（スコア0）— 副業のため物理出社・リアルタイム面談不可の案件のみ除外
+# 「業務経験」「実務経験」「経験必須」は除外しない（夫が品質管理するため問題なし）
 _EXCLUDE_KEYWORDS = (
     "ミーティング", "web面談", "Web面談", "zoom", "Zoom", "ZOOM",
     "meet", "Meet", "面談", "出社", "通勤", "来社",
-    "業務経験", "実務経験", "経験者", "経験必須",
 )
+
+
+def _detect_job_type(text: str) -> str:
+    """Detect job category: 'writing', 'it', or 'general'.
+
+    Used to apply appropriate payment thresholds for each domain.
+    Writing jobs have lower per-job budgets but still qualify as good pay.
+    """
+    writing_hits = sum(1 for kw in _WRITING_JOB_KEYWORDS if kw in text)
+    it_hits = sum(1 for kw in _IT_JOB_KEYWORDS if kw in text)
+    if writing_hits > it_hits:
+        return "writing"
+    if it_hits > writing_hits:
+        return "it"
+    return "general"
+
+
+def _extract_char_unit_price(text: str) -> float | None:
+    """Extract per-character price (円/文字) from job description.
+
+    Recognises patterns like:
+      - 文字単価1.0円
+      - 0.5円/文字
+      - 1文字0.8円
+    Returns None if not found.
+    """
+    patterns = [
+        r"文字単価\s*([0-9]+(?:\.[0-9]+)?)\s*円",
+        r"([0-9]+(?:\.[0-9]+)?)\s*円\s*[/／]\s*文字",
+        r"1\s*文字\s*([0-9]+(?:\.[0-9]+)?)\s*円",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                pass
+    return None
 
 
 def _days_until(deadline: str) -> int | None:
@@ -181,7 +235,14 @@ def score_job(job: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     """Compute おすすめ度 (0-80) for a job.
 
     Returns (score, breakdown) where breakdown details each component.
-    Scoring matches yomi/injection.md spec exactly.
+
+    Scoring components (max 80):
+      1. 報酬単価  : 15点 (job-type-aware thresholds; char unit price for writing)
+      2. 競合少なさ: 10点 (was 15 — reduced to avoid "no applicants = good" trap)
+      3. スキルマッチ: 23点 (was 20 — raised; writing/IT keywords separated)
+      4. 継続性    : 12点 (was 10 — raised for stable income signal)
+      5. 期限余裕  : 10点
+      6. AI利用OK  : 10点 (cancelled if budget too low — anti-low-price-trap)
     """
     title = job.get("title", "") or ""
     desc = job.get("description", "") or ""
@@ -200,57 +261,105 @@ def score_job(job: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             "excluded_by": excluded_by,
         }
 
+    # ジョブタイプ判定（報酬スコアの閾値切り替えに使用）
+    job_type = _detect_job_type(text)
+
     # 1. 報酬単価 (最大15点)
+    # ジョブタイプ別に閾値を調整: ライティングは1件単価が低いが文字単価で評価
     if budget_type == "時給":
         if budget_max >= 2000:
             payment_pts = 15
         elif budget_max >= 1500:
             payment_pts = 10
-        else:
+        elif budget_max >= 1000:
             payment_pts = 5
-    else:  # 固定/タスク/コンペ/その他
-        if budget_max >= 30000:
-            payment_pts = 15
-        elif budget_max >= 10000:
-            payment_pts = 10
-        elif budget_max >= 5000:
-            payment_pts = 7
-        elif budget_max >= 2000:
-            payment_pts = 4
         else:
             payment_pts = 1
+    else:  # 固定/タスク/コンペ/その他
+        # 文字単価が取得できる場合はそちらを優先（ライティング案件に有利）
+        char_price = _extract_char_unit_price(text)
+        if char_price is not None:
+            if char_price >= 1.0:
+                payment_pts = 15
+            elif char_price >= 0.5:
+                payment_pts = 10
+            elif char_price >= 0.3:
+                payment_pts = 7
+            elif char_price >= 0.1:
+                payment_pts = 4
+            else:
+                payment_pts = 1
+        elif job_type == "writing":
+            # ライティング案件は1件単価が低いので閾値を下げて評価
+            if budget_max >= 10000:
+                payment_pts = 15
+            elif budget_max >= 5000:
+                payment_pts = 10
+            elif budget_max >= 3000:
+                payment_pts = 7
+            elif budget_max >= 1000:
+                payment_pts = 4
+            else:
+                payment_pts = 1
+        else:
+            # IT・コンサル・一般案件は元の高めの閾値
+            if budget_max >= 30000:
+                payment_pts = 15
+            elif budget_max >= 10000:
+                payment_pts = 10
+            elif budget_max >= 5000:
+                payment_pts = 7
+            elif budget_max >= 2000:
+                payment_pts = 4
+            else:
+                payment_pts = 1
 
-    # 2. 競合少なさ (最大15点)
+    # 2. 競合少なさ (最大10点) — 15点から下げて「地雷案件」を上位に押し上げないよう調整
     if applicants <= 5:
-        competition_pts = 15
-    elif applicants <= 15:
         competition_pts = 10
+    elif applicants <= 15:
+        competition_pts = 7
     elif applicants <= 30:
-        competition_pts = 6
+        competition_pts = 4
     elif applicants <= 50:
-        competition_pts = 3
+        competition_pts = 2
     else:
         competition_pts = 0
 
-    # 3. スキルマッチ (最大20点)
+    # 3. スキルマッチ (最大23点) — IT系と妻ライティング系を別カテゴリで判定
     off_topic = any(kw in text for kw in _OFF_TOPIC_KEYWORDS)
     if off_topic:
         skill_pts = 3
     else:
-        matches = sum(1 for kw in _SKILL_KEYWORDS if kw in text)
-        if matches >= 3:
-            skill_pts = 20
-        elif matches == 2:
-            skill_pts = 15
-        elif matches == 1:
-            skill_pts = 10
+        # IT系キーワードとライティング系キーワードを分けてカウント
+        writing_skill_kws = (
+            "ライフスタイル", "美容", "料理", "旅行", "グルメ", "レビュー", "口コミ",
+            "ブログ", "コラム", "記事", "ライティング", "SEO",
+        )
+        it_skill_kws = ("AI", "DX", "ディレクション", "Notion", "Python", "IT", "生成AI")
+        writing_matches = sum(1 for kw in writing_skill_kws if kw in text)
+        it_matches = sum(1 for kw in it_skill_kws if kw in text)
+        # 案件タイプに対応するカテゴリのKW数を主スコアに、他カテゴリは補助として加算
+        if job_type == "writing":
+            primary, secondary = writing_matches, it_matches
         else:
-            skill_pts = 5
+            primary, secondary = it_matches, writing_matches
+        combined = primary * 2 + secondary  # 主カテゴリを2倍重視
+        if combined >= 6:
+            skill_pts = 23
+        elif combined >= 4:
+            skill_pts = 18
+        elif combined >= 2:
+            skill_pts = 13
+        elif combined >= 1:
+            skill_pts = 8
+        else:
+            skill_pts = 4
     if ("AI禁止" in text) or ("人間執筆必須" in text):
         skill_pts = max(0, skill_pts - 5)
 
-    # 4. 継続性 (最大10点)
-    continuity_pts = 10 if any(kw in text for kw in _CONTINUITY_KEYWORDS) else 0
+    # 4. 継続性 (最大12点) — 安定稼働につながる継続案件を重視
+    continuity_pts = 12 if any(kw in text for kw in _CONTINUITY_KEYWORDS) else 0
 
     # 5. 応募期限余裕 (最大10点)
     days = _days_until(deadline)
@@ -265,9 +374,17 @@ def score_job(job: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     else:
         deadline_pts = 0
 
-    # 6. AI利用OK (最大10点)
-    ai_ok = any(kw in text for kw in _AI_OK_KEYWORDS) and "AI禁止" not in text
-    ai_pts = 10 if ai_ok else 0
+    # 6. AI利用OK (最大10点) — 低単価量産トラップ対策: 報酬が最低ラインを下回る場合は加点しない
+    ai_ok_signal = any(kw in text for kw in _AI_OK_KEYWORDS) and "AI禁止" not in text
+    if ai_ok_signal:
+        # 低単価トラップ判定: 時給1000円未満 / 固定2000円未満はAI加点なし
+        is_low_price_trap = (
+            (budget_type == "時給" and 0 < budget_max < 1000)
+            or (budget_type != "時給" and 0 < budget_max < 2000)
+        )
+        ai_pts = 0 if is_low_price_trap else 10
+    else:
+        ai_pts = 0
 
     total = (
         payment_pts + competition_pts + skill_pts
@@ -276,6 +393,7 @@ def score_job(job: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     breakdown = {
         "total": total,
         "excluded": False,
+        "job_type": job_type,
         "payment": payment_pts,
         "competition": competition_pts,
         "skill": skill_pts,
@@ -338,12 +456,21 @@ def search_jobs(
         if page >= page_info.get("total_page", 1):
             break
 
-    # Client-side filter
+    # Client-side filters
     if min_budget is not None:
         all_jobs = [
             j for j in all_jobs
             if (j["budget_max"] or 0) >= min_budget
         ]
+
+    # 期限切れ除外（deadline が明記されていて既に過ぎている案件）
+    all_jobs = [
+        j for j in all_jobs
+        if _days_until(j.get("deadline", "")) is None or _days_until(j.get("deadline", "")) >= 0
+    ]
+
+    # クライアント本人確認済み案件のみ
+    all_jobs = [j for j in all_jobs if j.get("client_certified")]
 
     logger.info(
         "CrowdWorks search '%s': %d jobs found (pages: %d)",

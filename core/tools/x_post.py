@@ -609,15 +609,25 @@ def execute_pending_posts(slot: str, anima_dir: str = "") -> dict:
     posted = []
     errors = []
 
+    # Collect all approved posts for this slot, sorted oldest-first (filename is timestamp-prefixed)
+    approved_files = []
     for filepath in sorted(PENDING_DIR.glob("*.json")):
         try:
             draft = json.loads(filepath.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
+        if draft.get("status") == "approved" and draft.get("slot") == slot:
+            approved_files.append((filepath, draft))
 
-        if draft.get("status") != "approved" or draft.get("slot") != slot:
-            continue
+    if len(approved_files) > 1:
+        skipped_ids = [d.get("id") for _, d in approved_files[1:]]
+        logger.warning(
+            "Multiple approved posts for slot '%s' (%d total) — executing oldest only, skipping: %s",
+            slot, len(approved_files), skipped_ids,
+        )
 
+    # Execute only the oldest approved post (first by filename sort)
+    for filepath, draft in approved_files[:1]:
         try:
             client = XPostClient()
             result = client.post_tweet(text=draft["text"])

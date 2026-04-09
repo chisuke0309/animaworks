@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 
 from core.time_utils import ensure_aware, now_jst
@@ -68,6 +69,7 @@ class AnimaRunner:
         self.ipc_server: IPCServer | None = None
         self.inbox_watcher_task: asyncio.Task | None = None
         self.pending_task_watcher_task: asyncio.Task | None = None
+        self.processed_cleanup_task: asyncio.Task | None = None
         self.shutdown_event = asyncio.Event()
         self._ready_event = asyncio.Event()
         self._started_at = now_jst()
@@ -197,6 +199,11 @@ class AnimaRunner:
             # Start pending task watcher (picks up animaworks-tool submit)
             self.pending_task_watcher_task = asyncio.create_task(
                 self._pending_executor.watcher_loop()
+            )
+
+            # Start processed inbox cleanup (delete files older than 7 days)
+            self.processed_cleanup_task = asyncio.create_task(
+                self._processed_inbox_cleanup_loop()
             )
 
             logger.info("Anima process ready: %s", self.anima_name)
@@ -568,6 +575,51 @@ class AnimaRunner:
             raise RuntimeError("Anima not initialized")
         return await self.anima.interrupt()
 
+    # ── Processed inbox cleanup ───────────────────────────────────
+
+    _PROCESSED_RETENTION_DAYS = 7
+    _PROCESSED_CLEANUP_INTERVAL_SEC = 3600  # run once per hour
+
+    async def _processed_inbox_cleanup_loop(self) -> None:
+        """Delete processed inbox files older than _PROCESSED_RETENTION_DAYS.
+
+        Runs hourly. Prevents unbounded growth of the processed/ directory,
+        which would otherwise cause Bash ls output to balloon and waste tokens
+        in heartbeat tool_results.
+        """
+        processed_dir = self.shared_dir / "inbox" / self.anima_name / "processed"
+        cutoff_sec = self._PROCESSED_RETENTION_DAYS * 86400
+
+        logger.info("Processed inbox cleanup started: %s (retain %dd)", self.anima_name, self._PROCESSED_RETENTION_DAYS)
+
+        while not self.shutdown_event.is_set():
+            try:
+                await asyncio.wait_for(
+                    self.shutdown_event.wait(),
+                    timeout=self._PROCESSED_CLEANUP_INTERVAL_SEC,
+                )
+                break  # shutdown
+            except asyncio.TimeoutError:
+                pass  # normal interval elapsed
+
+            if not processed_dir.exists():
+                continue
+
+            now = time.time()
+            deleted = 0
+            for fp in processed_dir.glob("*.json"):
+                try:
+                    if now - fp.stat().st_mtime > cutoff_sec:
+                        fp.unlink()
+                        deleted += 1
+                except OSError:
+                    logger.debug("Failed to remove processed file %s", fp, exc_info=True)
+
+            if deleted:
+                logger.info("Processed inbox cleanup: %s — deleted %d file(s)", self.anima_name, deleted)
+
+        logger.info("Processed inbox cleanup stopped: %s", self.anima_name)
+
     # ── Cleanup ───────────────────────────────────────────────────
 
     async def _cleanup(self) -> None:
@@ -593,6 +645,14 @@ class AnimaRunner:
             self.inbox_watcher_task.cancel()
             try:
                 await self.inbox_watcher_task
+            except asyncio.CancelledError:
+                pass
+
+        # Stop processed inbox cleanup
+        if self.processed_cleanup_task:
+            self.processed_cleanup_task.cancel()
+            try:
+                await self.processed_cleanup_task
             except asyncio.CancelledError:
                 pass
 

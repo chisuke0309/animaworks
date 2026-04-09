@@ -102,6 +102,36 @@ animaworks/
 
 ---
 
+## HBとInbox処理の役割分担（アーキテクチャ）
+
+### Heartbeat（HB）の意義
+**「自分から考えて動く」ための定期実行。** 外部トリガーを待たず、自律的にパイプライン状態を監視・判断・行動する。
+
+- タスクキューの保守（staleタスク自動ブロック・自動解決）
+- パイプライン進捗の確認と次工程への指示
+- cronの補完（決まった時刻以外の状態監視）
+- Reflection（自己評価・内省）
+
+### Inbox処理の意義
+**「届いたメッセージに応答する」受け身の処理。** `inbox_watcher_loop` が2秒ごとにポーリングし、未読を検知したら即座に `process_inbox_message()` を起動する。
+
+### 役割の住み分け
+
+| | Inbox処理 | HB |
+|--|----------|-----|
+| トリガー | メッセージ到着（外部起因） | 定期タイマー（自律） |
+| 目的 | 指示を受けて動く（受け身） | 自分から考えて動く（能動） |
+| 実装 | `InboxRateLimiter.inbox_watcher_loop()` | `HeartbeatMixin.run_heartbeat()` |
+
+### ⚠️ heartbeat.md にInbox確認を書いてはいけない
+
+inbox_watcherがメッセージ到着を自動検知して処理するため、**HBでAnimaが自分でinboxを確認する必要はない**。
+heartbeat.mdに「Inboxに未読メッセージがあるか確認せよ」等の指示を書くと、自動処理済みのものを二重確認する無駄なトークン消費が発生する。
+
+> **経緯**: inbox_watcherはHBより後から実装された後付け機能。初期のheartbeat.mdテンプレートにinbox確認の指示が残っていたが、inbox_watcher実装後は不要になった。
+
+---
+
 ## 実行モード（重要）
 
 コードを読む上で必ず把握しておくこと。
@@ -211,6 +241,22 @@ uv run python main.py --help
 | 2 | `~/.animaworks/config.json` | `animas` セクションにエントリ追加（`unit` / `supervisor` / `heartbeat_offset_minutes` 等） |
 | 3 | `~/.animaworks/common_knowledge/organization/goals.md` | 所属事業部のメンバーテーブルに行を追加。新事業部の場合は unit セクション（`<!-- unit:xxx -->`）ごと追加 |
 | 4 | `.claude/commands/handoff.md` | モデル構成テーブルに行を追加 |
+
+### ⚠️ 人間アカウント追加時の追加注意事項
+
+AIエージェントではなく**実在の人間**（オーナー・スタッフ等）をアカウントとして登録する場合、以下を必ず守ること。
+
+**`status.json` を `enabled: false` にすること（必須）**
+
+```json
+{ "enabled": false }
+```
+
+**理由**: `enabled: false` のアカウント宛メッセージは、TicketManager の未引取アラートから自動除外される。  
+人間は AI と違い即座にメッセージを読めないため、タイムアウトアラートは常に誤報になる。  
+`enabled: true` のまま登録すると10分おきに `⚠️ メッセージ未引取` 通知が飛び続ける。
+
+また `asset_reconciler` も `enabled: false` をチェックしており、人間アカウントへの誤ったLLMプロンプト合成（API課金）を防いでいる。
 
 ### モデル・ロール変更時
 

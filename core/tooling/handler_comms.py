@@ -478,6 +478,12 @@ class CommsToolsMixin:
                 "reason": f"Same subject was sent {elapsed}s ago. Cooldown is {self._CALL_HUMAN_COOLDOWN_SECS}s.",
             }, ensure_ascii=False)
         attachments = args.get("attachments", None)
+        # LLM sometimes passes attachments as a JSON string instead of an array
+        if isinstance(attachments, str):
+            try:
+                attachments = _json.loads(attachments)
+            except (_json.JSONDecodeError, ValueError):
+                attachments = None
 
         if not subject or not body:
             return _error_result(

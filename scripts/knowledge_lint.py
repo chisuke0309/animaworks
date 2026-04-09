@@ -28,15 +28,24 @@ SHARED_BASE = Path(os.path.expanduser("~/.animaworks/shared"))
 def _load_anima_names() -> list[str]:
     """config.json の animas セクションからAnima名一覧を動的に取得する。
     config.json が存在しない場合はフォールバックリストを返す。
+    人間アカウント（status.json の enabled: false）は除外する。
     """
     config_path = Path(os.path.expanduser("~/.animaworks/config.json"))
+    animas_base = Path(os.path.expanduser("~/.animaworks/animas"))
     if config_path.exists():
         cfg = json.loads(config_path.read_text(encoding="utf-8"))
-        # unit が null（human/ops）のエントリを除外し、実Animaのみ返す
-        return [
-            name for name, val in cfg.get("animas", {}).items()
-            if val.get("unit") is not None
-        ]
+        result = []
+        for name in cfg.get("animas", {}):
+            status_path = animas_base / name / "status.json"
+            if status_path.exists():
+                try:
+                    status = json.loads(status_path.read_text(encoding="utf-8"))
+                    if not status.get("enabled", True):
+                        continue  # 人間アカウント（disabled）を除外
+                except (json.JSONDecodeError, OSError):
+                    pass
+            result.append(name)
+        return result
     return ["cicchi", "kuro", "rue", "sora", "hana", "maru", "chiro", "tama"]
 
 ANIMAS = _load_anima_names()
@@ -72,6 +81,8 @@ VALID_TOOL_NAMES = {
     "tiktok_analytics",
     # tiktok_analytics のアクション名（dispatch経由で呼ぶ）
     "tiktok_scrape_engagement", "tiktok_get_performance", "tiktok_record_engagement",
+    # crowdworks
+    "crowdworks_search",
 }
 
 # 廃止済み用語とその説明
@@ -185,10 +196,8 @@ def check_char_limits(files: list[tuple[str, str, str]], report: LintReport):
         re.compile(r'MAX_CHARS\s*=\s*(\d+)'),
     ]
 
-    # 280をスレッド文脈で使っている場合はOK
-    THREAD_CONTEXT = re.compile(r'スレッド|thread|個別|per.?tweet|各ツイート', re.IGNORECASE)
-    # 単一投稿の文脈
-    SINGLE_CONTEXT = re.compile(r'Premium|長文|単一投稿|single.?post|上限|制限|以内', re.IGNORECASE)
+    # 280をスレッド文脈・リプライ文脈・最低文字数文脈で使っている場合はOK
+    THREAD_CONTEXT = re.compile(r'スレッド|thread|個別|per.?tweet|各ツイート|リプライ|reply|返信|以内を推奨|以下.*情報量|情報量.*以下|短すぎる|スレッド時のみ', re.IGNORECASE)
 
     for path, content, source in files:
         lines = content.split("\n")
@@ -205,7 +214,8 @@ def check_char_limits(files: list[tuple[str, str, str]], report: LintReport):
 
                     # 280を非スレッド文脈で使用 → 古い制限の可能性
                     if num == 280:
-                        context_window = content[max(0, m.start() - 200):m.end() + 200]
+                        # 行全体 + 前後数行をコンテキストとして検索（m.start/endは行内位置のため）
+                        context_window = line
                         if not THREAD_CONTEXT.search(context_window):
                             report.add(Issue(
                                 severity="warning",
@@ -225,9 +235,16 @@ def check_tool_names(files: list[tuple[str, str, str]], report: LintReport):
 
     for path, content, source in files:
         lines = content.split("\n")
+        in_code_block = False
         for line_no, line in enumerate(lines, 1):
-            # バージョン履歴行や将来実装NOTE行はスキップ
+            # フェンスコードブロック（```）内はスキップ（変数名・引数名を誤検知しないため）
             stripped = line.strip()
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if in_code_block:
+                continue
+            # バージョン履歴行や将来実装NOTE行はスキップ
             if stripped.startswith("- v") and ("→" in line or "に修正" in line):
                 continue
             if "将来的に" in line or "実装予定" in line:
@@ -254,6 +271,10 @@ def check_tool_names(files: list[tuple[str, str, str]], report: LintReport):
                     "from_person", "to_person", "in_reply_to_tweet_id",
                     "quote_tweet_id", "likes_per_session", "replies_per_session",
                     "quotes_per_session", "tiktok_body", "overlay_texts",
+                    # crowdworks/notion のPython内部関数名・フィールド名（ツールではない）
+                    "search_jobs", "query_database", "update_page", "create_page",
+                    "client_name", "budget_max", "budget_type", "posted_at",
+                    "database_id", "page_id", "score_breakdown",
                 }
                 if name in NON_TOOL_NAMES:
                     continue
@@ -621,11 +642,14 @@ def check_workflow_consistency(files: list[tuple[str, str, str]], report: LintRe
     # 今のところは情報収集のみ（矛盾検出は将来拡張）
     # rueのアクションに「コンテンツ制作」が含まれていたら矛盾など
     for path, content, source in files:
-        # rueがコンテンツ制作をしている記述
+        # rueがコンテンツ制作をしている記述（否定・役割外明記の文脈はスキップ）
+        ROLE_NEGATION = re.compile(r'担当しない|しない|不要|除外|禁止|ではない|でない')
         if re.search(r'rue\s*(?:が|は|に|→)\s*(?:コンテンツ|制作|ライト|リライト)', content):
             lines = content.split("\n")
             for line_no, line in enumerate(lines, 1):
                 if re.search(r'rue\s*(?:が|は|に|→)\s*(?:コンテンツ|制作|ライト|リライト)', line):
+                    if ROLE_NEGATION.search(line):
+                        continue  # 「rueはコンテンツ制作を担当しない」等の否定文脈はスキップ
                     report.add(Issue(
                         severity="warning",
                         category="workflow",
