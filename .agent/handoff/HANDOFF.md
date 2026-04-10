@@ -1,4 +1,4 @@
-# HANDOFF — 2026-04-09 13:23
+# HANDOFF — 2026-04-09 18:08
 
 ## 使用ツール
 Claude Code (claude-sonnet-4-6)
@@ -7,62 +7,71 @@ Claude Code (claude-sonnet-4-6)
 
 ## 今回のセッションで実施した内容
 
-### 前半: SEO記事の知見をAnimaWorksに適用（X・TikTok両事業部）
+### X事業部 マーケティング強化
 
-英語記事（Claude CoworkによるローカルSEO自動化）の「ビジネスコンテキスト先渡し」「競合速度分析」「複数バリエーション出力＋選定基準」の考え方をX・TikTok両パイプラインに実装。
+「AI完全自動X運用」記事の技術・戦略部分を抽出し、TrinityDox（@trinitydox）に適用。
 
-**X事業部（cicchi/rue/kuro）**:
-- `rue/knowledge/account-context.md`（新規）: アカウント現状コンテキスト先渡し
-- `rue/procedures/x-post-pipeline.md`: account-context参照必須化・競合速度分析追加
-- `cicchi/knowledge/content_creation_workflow.md`: kuro委任テンプレートにA/B/C 3案出力標準化・cicchi選定ガイドライン追加
-- `cicchi/injection.md`: セッション開始時の参照ファイル順序を冒頭に明記
+#### 1. 仮想敵の定義
+`rue/knowledge/account-context.md` に追加。
+- **「曖昧で行動できない犬の健康情報」**（「異常を感じたら受診」だけで終わる情報）
+- **「専門用語だらけの獣医情報」**（飼い主が何をすべきか分からない情報）
+- ニッチ選定基準への派生ルールも明記
 
-**TikTok事業部（maru/chiro/tama）**:
-- `maru/knowledge/account-context.md`（新規）: TikTokアカウント現状コンテキスト先渡し
-- `maru/injection.md`: 参照順冒頭追加・tama委任テンプレートA/B/C 3案・選定ガイドライン追加
-- `chiro/knowledge/competitor_analysis.md`: 競合速度分析（週1回）の手順・報告フォーマット追加
+#### 2. 構文テンプレートライブラリ（kuro）
+`kuro/knowledge/post-templates.md` を新規作成（7構文・TrinityDox向け実例付き）。
+`kuro/injection.md` に「構文選択 → 文体チェック」の順番を明記。
 
-### 後半: kuroの文体改善（x-mentor-skill方法論の適用）
+#### 3. rueへのブランドボイス設計タスク投入
+task_id: `7aab6827ec13`、期限: 04-09 22:00
+- 発信ポジション・口癖リスト15〜20個・導入パターン6種
+- 完了時: `kuro/knowledge/brand-voice.md` に書き込み
 
-「kuroの文章が硬い」という課題に対し、x-mentor-skill（Nicolas Cole / Dickie Bush等の方法論）をGitHubから取得・分析し、kuro向けの文体原則として落とし込んだ。
+---
 
-**問題の診断**:
-- 1文に複数事実を詰め込みすぎ（「・」「——」の連続）
-- Hookが命令形スタート（「〜してください」）
-- 感情語（Aspirational / Anthropological）が欠如
-- 1/3/1節奏が使われていない
+### TikTok事業部 品質設計改善
 
-**実装**:
-- `kuro/knowledge/writing-style-principles.md`（新規）: 1/3/1節奏・感情フック・4Aバランス・チェックリスト・Before/After実例
-- `kuro/injection.md`: リライト前に上記を必ず参照するよう冒頭に明記
-- 再起動不要。次回HBから自動反映
+04-09夕方枠「機密データをAIで分析したいなら」カルーセルのスライド3・4が「淡々とした説明文」になっていた問題を起点に、構造的な解決策を実装。
+
+#### オーバーレイテキスト構文パターン集（tama）
+`tama/knowledge/overlay-text-patterns.md` を新規作成。
+`tama/injection.md` に参照指示を追加（制作前にパターン選択・使用ログ追記）。
+
+**6パターン**:
+| パターン | 保存動機 |
+|---------|---------|
+| 恐怖→解決型 | 「知らなかった。今すぐ確認しなきゃ」 |
+| 物語型 | 「この話、誰かに話したい」 |
+| チェックリスト保存型 | 「後で使いたい。会議に持っていきたい」 |
+| 逆張り型 | 「みんなが間違えてる。シェアしたい」 |
+| 数字衝撃型 | 「この数字、上司に見せたい」 |
+| ビフォーアフター型 | 「自分も変わりたい。やり方を保存しておこう」 |
+
+加えて禁止ワード表・保存される3条件・連続使用防止ログを実装。
 
 ---
 
 ## 未完了・次回の確認ポイント
 
-- [ ] **call_human attachments修正の動作確認** — maruがTelegram画像添付できるか（前々回から持ち越し）
-- [ ] **kuroの文体変化を確認** — 次の投稿でwriting-style-principlesが反映されているか（1/3/1節奏・感情語・反問形フック）
-- [ ] **cicchi/rueの変化を確認** — account-context.mdが参照されているか、3案出力が機能しているか
+- [ ] **rueのブランドボイス設計完了確認** — `kuro/knowledge/brand-voice.md` が生成されたか。kuroの実投稿に反映されているか
+- [ ] **kuroの構文テンプレート使用確認** — post-templates.md の構文が実際に使われているか
+- [ ] **tamaのオーバーレイテキスト改善確認** — 次回カルーセルでパターンが選ばれているか。使用ログが追記されているか
+- [ ] **call_human attachments修正の動作確認** — maruがTelegram画像添付できるか（持ち越し）
 - [ ] **chiroの競合速度分析が初回実行されるか** — maruからの委任で動くか確認
 
 ---
 
 ## 変更ファイル一覧
 
+変更はすべて `~/.animaworks/` 配下（git管理外）のため git status には現れない。
+
 | ファイル | 変更内容 |
 |---------|---------|
-| `~/.animaworks/animas/rue/knowledge/account-context.md` | 新規作成 |
-| `~/.animaworks/animas/rue/procedures/x-post-pipeline.md` | account-context参照必須化・競合速度分析追加 |
-| `~/.animaworks/animas/cicchi/knowledge/content_creation_workflow.md` | A/B/C 3案標準化・選定ガイドライン追加 |
-| `~/.animaworks/animas/cicchi/injection.md` | セッション開始時参照順を冒頭に明記 |
-| `~/.animaworks/animas/maru/knowledge/account-context.md` | 新規作成 |
-| `~/.animaworks/animas/maru/injection.md` | 参照順・tama委任テンプレート・選定ガイドライン追加 |
-| `~/.animaworks/animas/chiro/knowledge/competitor_analysis.md` | 競合速度分析手順・報告フォーマット追加 |
-| `~/.animaworks/animas/kuro/knowledge/writing-style-principles.md` | 新規作成（文体原則） |
-| `~/.animaworks/animas/kuro/injection.md` | リライト前参照必須を冒頭に明記 |
-
-※ git管理外ファイル（~/.animaworks/配下）のため git status には現れない
+| `~/.animaworks/animas/rue/knowledge/account-context.md` | 仮想敵セクション追加 |
+| `~/.animaworks/animas/rue/state/task_queue.jsonl` | ブランドボイス設計タスク追加 (task_id: 7aab6827ec13) |
+| `~/.animaworks/animas/kuro/knowledge/post-templates.md` | 新規作成（7構文） |
+| `~/.animaworks/animas/kuro/injection.md` | post-templates.md参照追加 |
+| `~/.animaworks/animas/tama/knowledge/overlay-text-patterns.md` | 新規作成（6パターン） |
+| `~/.animaworks/animas/tama/injection.md` | overlay-text-patterns.md参照追加 |
 
 ---
 
@@ -86,6 +95,6 @@ Claude Code (claude-sonnet-4-6)
 
 ## Knowledge Lint レポート
 
-**サマリ**: critical 0件, warning 0件（148ファイルスキャン）
+**サマリ**: critical 0件, warning 0件（150ファイルスキャン）
 
 知識矛盾なし ✅
