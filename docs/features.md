@@ -460,6 +460,8 @@ Execution mode redesign, task queue, resolution registry, dynamic Priming, refac
   [Design](implemented/20260219_priming-intent-budget-allocation_implemented-20260220.md) | [Review](implemented/20260220_review2_priming-intent-budget-allocation_revision-20260220.md)
 - **Memory System Symmetry and Skill Vector Search** (2026-02-19) — failure/success counts for knowledge, vector search for skill matching, contradiction history persistence
   [Design](implemented/20260219_memory-system-symmetry-and-skill-vector-search_implemented-20260220.md) | [Review](implemented/20260220_review2_memory-system-symmetry-and-skill-vector-search_approved-20260220.md)
+- **Automated Knowledge File Rotation** (2026-04-12) — Three system-level cron jobs for proactive knowledge hygiene: (1) episodes rotation (daily 03:30 JST, 7-day retention), (2) knowledge rotation (daily 03:35 JST, deletes dated snapshot files — `YYYY-MM-DD` / `YYYYMMDD` pattern — older than 7 days), (3) engagement log rotation (monthly 1st 04:00 JST, trims `engagement_log.md` sections older than 30 days). Prevents stale snapshots from being retrieved via `search_memory` and re-contaminating agent context.
+- **Weekly Team-Led Knowledge Review** (2026-04-12) — Every Monday, `cicchi` (X division) and `maru` (TikTok division) orchestrate a team-wide knowledge consolidation: each Anima reads their `knowledge/` directory, evaluates validity against organizational goals, rewrites surviving knowledge into theme-based consolidated files, and deletes source files. Results are aggregated and reported via `call_human`.
 
 ### Communication & Resilience
 

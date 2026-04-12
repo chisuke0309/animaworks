@@ -110,6 +110,36 @@ class SchedulerMixin:
         )
         logger.info("System cron: task_queue stale cleanup at 06:00 JST")
 
+        # ── Episodes rotation (keep 7 days) ──────────────────────
+        self.scheduler.add_job(
+            self._run_episodes_rotation,
+            CronTrigger(hour=3, minute=30),
+            id="system_episodes_rotation",
+            name="System: Episodes Rotation",
+            replace_existing=True,
+        )
+        logger.info("System cron: episodes rotation at 03:30 JST")
+
+        # ── Knowledge rotation (keep 7 days) ─────────────────────
+        self.scheduler.add_job(
+            self._run_knowledge_rotation,
+            CronTrigger(hour=3, minute=35),
+            id="system_knowledge_rotation",
+            name="System: Knowledge Rotation",
+            replace_existing=True,
+        )
+        logger.info("System cron: knowledge rotation at 03:35 JST")
+
+        # ── Engagement log rotation (monthly, keep 30 days) ──────
+        self.scheduler.add_job(
+            self._run_engagement_log_rotation,
+            CronTrigger(day=1, hour=4, minute=0),
+            id="system_engagement_log_rotation",
+            name="System: Engagement Log Rotation",
+            replace_existing=True,
+        )
+        logger.info("System cron: engagement_log rotation at 1st 04:00 JST")
+
         # ── Activity log rotation ────────────────────────────────
         try:
             from core.config.models import ActivityLogConfig
@@ -392,6 +422,184 @@ class SchedulerMixin:
                 logger.exception("task_queue cleanup failed for %s", anima_name)
 
         logger.info("task_queue stale cleanup complete: %d total tasks expired", total_expired)
+
+    async def _run_episodes_rotation(self, keep_days: int = 7) -> None:
+        """Delete episodes older than ``keep_days`` days for all animas.
+
+        Runs daily at 03:30 JST. Keeps the most recent 7 days of episodes and
+        removes everything older, including ``recovered_*`` files.
+        """
+        import re
+        from datetime import date, timedelta
+
+        logger.info("Starting system-wide episodes rotation (keep=%d days)", keep_days)
+        cutoff = date.today() - timedelta(days=keep_days)
+        date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        total_deleted = 0
+
+        for anima_name, anima_dir in self._iter_consolidation_targets():
+            episodes_dir = anima_dir / "episodes"
+            if not episodes_dir.exists():
+                continue
+            for md_file in episodes_dir.rglob("*.md"):
+                stem = md_file.stem
+                # Delete recovered_* files unconditionally
+                if stem.startswith("recovered_"):
+                    md_file.unlink()
+                    total_deleted += 1
+                    logger.debug("Episodes rotation: deleted recovered file %s", md_file)
+                    continue
+                # Delete date files older than cutoff
+                if date_pattern.match(stem):
+                    try:
+                        file_date = date.fromisoformat(stem)
+                        if file_date < cutoff:
+                            md_file.unlink()
+                            total_deleted += 1
+                            logger.debug("Episodes rotation: deleted %s", md_file)
+                    except ValueError:
+                        pass
+
+        logger.info("Episodes rotation complete: %d files deleted", total_deleted)
+
+    async def _run_knowledge_rotation(self, keep_days: int = 7) -> None:
+        """Delete dated knowledge files older than ``keep_days`` days for all animas.
+
+        Runs daily at 03:35 JST (just after episodes rotation).
+        Targets files whose name contains a date pattern (YYYY-MM-DD or YYYYMMDD)
+        anywhere in the filename. Scans recursively including archive/ subdirectories.
+        Non-dated files are never deleted.
+        """
+        import re
+        from datetime import date, timedelta
+
+        logger.info("Starting system-wide knowledge rotation (keep=%d days)", keep_days)
+        cutoff = date.today() - timedelta(days=keep_days)
+        iso_pattern = re.compile(r"(\d{4}-\d{2}-\d{2})")
+        compact_pattern = re.compile(r"(?<!\d)(\d{8})(?!\d)")
+        total_deleted = 0
+
+        for anima_name, anima_dir in self._iter_consolidation_targets():
+            knowledge_dir = anima_dir / "knowledge"
+            if not knowledge_dir.exists():
+                continue
+            for md_file in knowledge_dir.rglob("*.md"):
+                stem = md_file.stem
+                file_date = None
+
+                # Priority 1: ISO format YYYY-MM-DD
+                m = iso_pattern.search(stem)
+                if m:
+                    try:
+                        file_date = date.fromisoformat(m.group(1))
+                    except ValueError:
+                        pass
+
+                # Priority 2: Compact format YYYYMMDD
+                if file_date is None:
+                    m = compact_pattern.search(stem)
+                    if m:
+                        raw = m.group(1)
+                        try:
+                            file_date = date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
+                        except ValueError:
+                            pass
+
+                if file_date is not None and file_date < cutoff:
+                    try:
+                        md_file.unlink()
+                        total_deleted += 1
+                        logger.debug(
+                            "Knowledge rotation: deleted %s/%s",
+                            anima_name, md_file.relative_to(anima_dir),
+                        )
+                    except OSError:
+                        logger.exception(
+                            "Knowledge rotation: failed to delete %s/%s",
+                            anima_name, md_file.relative_to(anima_dir),
+                        )
+
+        logger.info("Knowledge rotation complete: %d files deleted", total_deleted)
+
+    async def _run_engagement_log_rotation(self, keep_days: int = 30) -> None:
+        """Trim dated sections from engagement_log.md for all animas.
+
+        Runs monthly on the 1st at 04:00 JST.
+        Scans for files named 'engagement_log.md' in each anima's knowledge/
+        directory and removes sections (## YYYY-MM-DD ...) older than keep_days.
+        The file header (lines before the first ## section) is always preserved.
+        """
+        import re
+        from datetime import date, timedelta
+
+        logger.info("Starting engagement log rotation (keep=%d days)", keep_days)
+        cutoff = date.today() - timedelta(days=keep_days)
+        section_date_pattern = re.compile(r"^## (\d{4}-\d{2}-\d{2})")
+        total_trimmed = 0
+
+        for anima_name, anima_dir in self._iter_consolidation_targets():
+            log_path = anima_dir / "knowledge" / "engagement_log.md"
+            if not log_path.exists():
+                continue
+            try:
+                lines = log_path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+                # Separate header (lines before first ## section)
+                header_lines: list[str] = []
+                section_lines: list[str] = []
+                in_header = True
+                for line in lines:
+                    if in_header and section_date_pattern.match(line):
+                        in_header = False
+                    if in_header:
+                        header_lines.append(line)
+                    else:
+                        section_lines.append(line)
+
+                # Split into sections and keep only those >= cutoff
+                current_section: list[str] = []
+                current_date: date | None = None
+                kept_sections: list[list[str]] = []
+
+                for line in section_lines:
+                    match = section_date_pattern.match(line)
+                    if match:
+                        if current_section:
+                            if current_date is not None and current_date >= cutoff:
+                                kept_sections.append(current_section)
+                        current_section = [line]
+                        try:
+                            current_date = date.fromisoformat(match.group(1))
+                        except ValueError:
+                            current_date = None
+                    else:
+                        current_section.append(line)
+
+                # Handle last section
+                if current_section:
+                    if current_date is not None and current_date >= cutoff:
+                        kept_sections.append(current_section)
+
+                original_count = sum(
+                    1 for line in section_lines if section_date_pattern.match(line)
+                )
+                kept_count = len(kept_sections)
+
+                if kept_count < original_count:
+                    new_content = "".join(header_lines) + "".join(
+                        "".join(s) for s in kept_sections
+                    )
+                    log_path.write_text(new_content, encoding="utf-8")
+                    removed = original_count - kept_count
+                    total_trimmed += removed
+                    logger.info(
+                        "Engagement log rotation for %s: removed %d sections",
+                        anima_name, removed,
+                    )
+            except Exception:
+                logger.exception("Engagement log rotation failed for %s", anima_name)
+
+        logger.info("Engagement log rotation complete: %d sections removed", total_trimmed)
 
     async def _run_activity_log_rotation(self) -> None:
         """Run activity log rotation for all animas."""

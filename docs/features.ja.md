@@ -460,6 +460,8 @@ call_human統合、組織構成プロンプト注入等。
   [設計](implemented/20260219_priming-intent-budget-allocation_implemented-20260220.md) | [Review](implemented/20260220_review2_priming-intent-budget-allocation_revision-20260220.md)
 - **記憶システム対称性改善・スキルベクトル検索化** (2026-02-19) — knowledgeに失敗カウント追加・スキルマッチングをベクトル検索化・矛盾履歴永続化
   [設計](implemented/20260219_memory-system-symmetry-and-skill-vector-search_implemented-20260220.md) | [Review](implemented/20260220_review2_memory-system-symmetry-and-skill-vector-search_approved-20260220.md)
+- **ナレッジファイル自動ローテーション** (2026-04-12) — 知識衛生のためのシステムレベルcronジョブ3本: (1) エピソードローテーション（毎日03:30 JST・7日保持）、(2) ナレッジローテーション（毎日03:35 JST・ファイル名に日付パターン `YYYY-MM-DD` / `YYYYMMDD` を含むスナップショット型ファイルを7日後に削除）、(3) エンゲージメントログローテーション（毎月1日04:00 JST・`engagement_log.md` の30日超えセクションをトリミング）。古いスナップショットが `search_memory` 経由で検索されてエージェントのコンテキストを汚染するのを防ぐ。
+- **週次チーム主導ナレッジ棚卸し** (2026-04-12) — 毎週月曜日、`cicchi`（X事業部）と `maru`（TikTok事業部）がチーム全体のナレッジ統合をオーケストレーション。各Animaが自分の `knowledge/` を読んで組織目標に照らした有効性を評価し、生き残った知識をテーマ別統合ファイルに書き直して元ファイルを削除。結果を `call_human` で報告。
 
 ### 通信・耐障害性
 

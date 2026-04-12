@@ -197,11 +197,49 @@ class XPostClient:
     # Legacy 280-char limit for threads (each individual tweet).
     MAX_CHARS_THREAD = 280
 
-    def post_tweet(self, text: str) -> dict:
-        """Post a single tweet.
+    MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json"
+
+    def upload_image(self, image_path: str) -> str:
+        """Upload an image via X API v1.1 media/upload and return the media_id.
+
+        Args:
+            image_path: Absolute path to the image file (PNG/JPG).
+
+        Returns:
+            media_id string to attach to a tweet.
+        """
+        path = Path(image_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Image not found: {image_path}")
+
+        media_data = base64.b64encode(path.read_bytes()).decode("utf-8")
+        auth_header = _oauth1_header(
+            method="POST",
+            url=self.MEDIA_UPLOAD_URL,
+            api_key=self.api_key,
+            api_secret=self.api_secret,
+            access_token=self.access_token,
+            access_token_secret=self.access_token_secret,
+        )
+        response = httpx.post(
+            self.MEDIA_UPLOAD_URL,
+            data={"media_data": media_data},
+            headers={"Authorization": auth_header, "User-Agent": "AnimaWorks/1.0"},
+            timeout=60.0,
+        )
+        if response.status_code == 401:
+            raise RuntimeError("OAuth authentication failed on media upload.")
+        response.raise_for_status()
+        media_id = str(response.json()["media_id"])
+        logger.info("Media uploaded: media_id=%s path=%s", media_id, image_path)
+        return media_id
+
+    def post_tweet(self, text: str, image_path: str | None = None) -> dict:
+        """Post a single tweet, optionally with an image.
 
         Args:
             text: Tweet text (max 25,000 characters for X Premium).
+            image_path: Optional absolute path to an image file to attach.
 
         Returns:
             API response dict with tweet id and text.
@@ -209,9 +247,13 @@ class XPostClient:
         text = _strip_markdown(text)
         if len(text) > self.MAX_CHARS:
             raise ValueError(f"Tweet text too long ({len(text)} chars, max {self.MAX_CHARS}).")
-        result = self._post({"text": text})
+        body: dict[str, Any] = {"text": text}
+        if image_path:
+            media_id = self.upload_image(image_path)
+            body["media"] = {"media_ids": [media_id]}
+        result = self._post(body)
         tweet_id = result.get("data", {}).get("id", "")
-        logger.info("Tweet posted: id=%s", tweet_id)
+        logger.info("Tweet posted: id=%s media=%s", tweet_id, bool(image_path))
         return result
 
     def post_thread(self, texts: list[str]) -> list[dict]:
@@ -467,7 +509,7 @@ def _score_post(text: str) -> dict:
 # ── Save pending post ─────────────────────────────────────────
 
 
-def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
+def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: str | None = None) -> dict:
     """Save a tweet draft for human approval.
 
     Creates a JSON file in ~/.animaworks/pending_posts/.
@@ -555,6 +597,7 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown") -> dict:
         "max_similarity": scoring["max_similarity"],
         "gate": gate,
         "gate_reason": scoring["gate_reason"],
+        "image_path": image_path or "",
     }
 
     filepath = PENDING_DIR / filename
@@ -630,7 +673,7 @@ def execute_pending_posts(slot: str, anima_dir: str = "") -> dict:
     for filepath, draft in approved_files[:1]:
         try:
             client = XPostClient()
-            result = client.post_tweet(text=draft["text"])
+            result = client.post_tweet(text=draft["text"], image_path=draft.get("image_path") or None)
             tweet_id = result.get("data", {}).get("id", "")
             logger.info("Pending post executed: %s → tweet %s", draft["id"], tweet_id)
 
@@ -824,6 +867,10 @@ def get_tool_schemas() -> list[dict]:
                         "type": "string",
                         "description": "Time slot label (e.g. 'morning', 'evening').",
                     },
+                    "image_path": {
+                        "type": "string",
+                        "description": "Optional absolute path to an image file to attach to the tweet (PNG/JPG).",
+                    },
                 },
                 "required": ["text", "slot"],
             },
@@ -872,6 +919,7 @@ def dispatch(name: str, args: dict[str, Any]) -> Any:
             text=args["text"],
             slot=args["slot"],
             anima=anima_name,
+            image_path=args.get("image_path") or None,
         )
 
     if name == "x_post_execute_pending":

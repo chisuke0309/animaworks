@@ -634,6 +634,43 @@ procedures/ has more lenient thresholds than knowledge/ (procedural memory is mo
 
 The monthly forgetting pipeline organizes old versions accumulated in `archive/procedure_versions/`. Only the 5 most recent versions per procedure file are retained; older versions are deleted.
 
+### Automated Knowledge File Rotation (System-Level)
+
+In addition to the `ForgettingEngine`-based forgetting above, the system scheduler (`core/supervisor/_mgr_scheduler.py`) runs two additional lightweight cleanup jobs:
+
+#### Episodes Rotation (Daily, 03:30 JST)
+
+Deletes `episodes/` files older than 7 days, including any `recovered_*` files. This prevents stale daily summaries from being retrieved via `search_memory` and re-injected into agent context.
+
+#### Knowledge Rotation (Daily, 03:35 JST)
+
+Deletes `knowledge/` files whose **filename contains a date pattern** (ISO `YYYY-MM-DD` or compact `YYYYMMDD`) older than 7 days. These are snapshot-type records — daily trend reports, consolidation snapshots, one-time memos — that lose relevance after a short window.
+
+```
+knowledge/
+  trend_20260409.md          ← deleted after 7 days (compact date in filename)
+  consolidation_2026-04-09.md ← deleted after 7 days (ISO date in filename)
+  writing-style-principles.md ← never deleted (no date pattern)
+```
+
+Scans recursively including `archive/` subdirectories. Non-dated files are never touched.
+
+#### Engagement Log Rotation (Monthly, 1st of month, 04:00 JST)
+
+Trims `knowledge/engagement_log.md` by removing `## YYYY-MM-DD` sections older than 30 days. The file header is always preserved. Prevents unbounded growth of high-frequency engagement logs (which grow ~80 lines/day when active).
+
+#### Weekly Knowledge Review (Team-Led, Monday)
+
+Beyond automated deletion, a human-in-the-loop knowledge consolidation process runs weekly via Anima cron tasks:
+
+- **Orchestrators**: `cicchi` (X division) and `maru` (TikTok division) send knowledge review instructions to their respective team members every Monday
+- **Each Anima**: Reads all files in their own `knowledge/` directory, evaluates validity against organizational goals (`common_knowledge/organization/goals.md`), and **rewrites** — not just summarizes — the surviving knowledge into theme-based consolidated files
+- **Process**: Multiple related files → one consolidated file per theme; source files are deleted after consolidation
+- **Report format**: `Before: X files → After: Y files, Deleted: Z files`
+- **Aggregation**: Both orchestrators include team-wide consolidation results in their `call_human` weekly report
+
+This mirrors how humans consolidate learning: not just discarding old notes, but rewriting them into coherent understanding.
+
 ---
 
 ## Unified Activity Log
