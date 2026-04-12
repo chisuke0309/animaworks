@@ -100,6 +100,16 @@ class SchedulerMixin:
             )
             logger.info("System cron: %s at %s JST", job_id, time_str)
 
+        # ── Task queue stale cleanup ─────────────────────────────
+        self.scheduler.add_job(
+            self._run_task_queue_cleanup,
+            CronTrigger(hour=6, minute=0),
+            id="system_task_queue_cleanup",
+            name="System: Task Queue Stale Cleanup",
+            replace_existing=True,
+        )
+        logger.info("System cron: task_queue stale cleanup at 06:00 JST")
+
         # ── Activity log rotation ────────────────────────────────
         try:
             from core.config.models import ActivityLogConfig
@@ -333,6 +343,55 @@ class SchedulerMixin:
                     )
             except Exception:
                 logger.exception("Monthly forgetting failed for %s", anima_name)
+
+    async def _run_task_queue_cleanup(self) -> None:
+        """Mark expired pending/in_progress tasks as 'expired' for all animas.
+
+        Runs daily at 06:00 JST. Targets tasks whose ``deadline`` is in the past
+        and whose status is still ``pending`` or ``in_progress``.
+        """
+        import json
+        from datetime import datetime, timezone
+
+        logger.info("Starting system-wide task_queue stale cleanup")
+        now = datetime.now(timezone.utc)
+        total_expired = 0
+
+        for anima_name, anima_dir in self._iter_consolidation_targets():
+            queue_path = anima_dir / "state" / "task_queue.jsonl"
+            if not queue_path.exists():
+                continue
+            try:
+                lines = queue_path.read_text(encoding="utf-8").splitlines()
+                updated = []
+                changed = 0
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    entry = json.loads(line)
+                    if entry.get("status") in ("pending", "in_progress"):
+                        deadline_str = entry.get("deadline") or entry.get("due_date")
+                        if deadline_str:
+                            try:
+                                deadline = datetime.fromisoformat(deadline_str)
+                                if deadline.tzinfo is None:
+                                    deadline = deadline.replace(tzinfo=timezone.utc)
+                                if deadline < now:
+                                    entry["status"] = "expired"
+                                    entry["updated_at"] = now.isoformat()
+                                    changed += 1
+                            except ValueError:
+                                pass
+                    updated.append(json.dumps(entry, ensure_ascii=False))
+                queue_path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+                if changed:
+                    logger.info("task_queue cleanup: %s — %d tasks expired", anima_name, changed)
+                    total_expired += changed
+            except Exception:
+                logger.exception("task_queue cleanup failed for %s", anima_name)
+
+        logger.info("task_queue stale cleanup complete: %d total tasks expired", total_expired)
 
     async def _run_activity_log_rotation(self) -> None:
         """Run activity log rotation for all animas."""

@@ -29,6 +29,32 @@ class ToolResult:
     error: str | None = None
 
 
+_dotenv_loaded = False
+
+
+def _load_dotenv_once() -> None:
+    """Load .env file into os.environ once per process.
+
+    Needed for launchd-launched processes that don't inherit the shell
+    environment where .env would normally be sourced.
+    """
+    global _dotenv_loaded
+    if _dotenv_loaded:
+        return
+    _dotenv_loaded = True
+    env_path = Path(__file__).parents[2] / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        if key and key not in os.environ:
+            os.environ[key] = val.strip()
+
+
 def get_env_or_fail(key: str, tool_name: str) -> str:
     """Get an environment variable, raising a clear error if missing."""
     val = os.environ.get(key)
@@ -87,8 +113,9 @@ def get_credential(
             _log_resolved(credential_name, key_name, "shared/credentials.json", val)
             return val
 
-    # 3. Environment variable fallback
+    # 3. .env file fallback (for launchd/subprocess environments that don't inherit shell env)
     if env_var:
+        _load_dotenv_once()
         val = os.environ.get(env_var)
         if val:
             _log_resolved(credential_name, key_name, f"env:{env_var}", val)

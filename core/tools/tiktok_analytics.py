@@ -24,6 +24,7 @@ EXECUTION_PROFILE: dict[str, dict[str, object]] = {
     "tiktok_weekly_report": {"expected_seconds": 10, "background_eligible": False},
     "tiktok_get_performance": {"expected_seconds": 5, "background_eligible": False},
     "tiktok_scrape_engagement": {"expected_seconds": 60, "background_eligible": False},
+    "tiktok_record_post": {"expected_seconds": 2, "background_eligible": False},
 }
 
 # ── Tool Schemas ──────────────────────────────────────────
@@ -89,6 +90,36 @@ def get_tool_schemas() -> list[dict]:
             },
         },
         {
+            "name": "tiktok_record_post",
+            "description": (
+                "TikTok投稿の納品記録をpost_plan_log.jsonlに保存する。"
+                "call_humanと同時に必ず呼ぶこと。"
+                "タイトルを本文とは別管理し、エンゲージメントデータとの前方マッチングに使用する。"
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "投稿タイトル（call_humanのsubjectと完全に同じ値）",
+                    },
+                    "format_type": {
+                        "type": "string",
+                        "description": "フォーマット（チェックリスト型/手順型/比較表型/問題解決型/etc.）",
+                    },
+                    "slot": {
+                        "type": "string",
+                        "description": "投稿枠（朝/夕方）",
+                    },
+                    "caption_prefix": {
+                        "type": "string",
+                        "description": "キャプション本文の冒頭30文字。tiktok_engagement.jsonlとのマッチングに使用。必須。",
+                    },
+                },
+                "required": ["title", "caption_prefix"],
+            },
+        },
+        {
             "name": "tiktok_scrape_engagement",
             "description": (
                 "TikTok Studioからエンゲージメントデータを自動スクレイピングする。"
@@ -114,6 +145,17 @@ def get_tool_schemas() -> list[dict]:
 
 
 # ── Data Storage ──────────────────────────────────────────
+
+
+def _get_post_plan_log(anima_dir: str | None = None) -> Path:
+    """Get the path to the post plan log (delivery records with title)."""
+    if anima_dir:
+        log_path = Path(anima_dir) / "knowledge" / "post_plan_log.jsonl"
+    else:
+        from core.paths import get_data_dir
+        log_path = get_data_dir() / "shared" / "post_plan_log.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    return log_path
 
 
 def _get_engagement_db(anima_dir: str | None = None) -> Path:
@@ -192,6 +234,39 @@ def record_engagement(args: dict, anima_dir: str | None = None) -> dict:
         "success": True,
         "message": f"エンゲージメント記録完了: {record['title']}",
         "save_rate": record["save_rate"],
+    }
+
+
+def record_post(args: dict, anima_dir: str | None = None) -> dict:
+    """Record a post delivery event to post_plan_log.jsonl.
+
+    Called at delivery time (alongside call_human) so the title is persisted
+    separately from the Telegram body. Used later for forward-matching against
+    tiktok_engagement.jsonl (which stores scraped title = caption prefix).
+    """
+    title = args.get("title", "").strip()
+    if not title:
+        return {"success": False, "message": "title は必須です"}
+
+    log_path = _get_post_plan_log(anima_dir)
+    now = datetime.now(timezone.utc).isoformat()
+
+    caption_prefix = args.get("caption_prefix", "").strip()[:40]
+
+    entry = {
+        "recorded_at": now,
+        "title": title,
+        "caption_prefix": caption_prefix,
+        "format_type": args.get("format_type", ""),
+        "slot": args.get("slot", ""),
+    }
+
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    return {
+        "success": True,
+        "message": f"投稿記録完了: {title[:40]}",
     }
 
 
@@ -410,5 +485,8 @@ def dispatch(name: str, args: dict[str, Any]) -> Any:
 
     if name == "tiktok_scrape_engagement":
         return scrape_engagement(args, anima_dir=anima_dir)
+
+    if name == "tiktok_record_post":
+        return record_post(args, anima_dir=anima_dir)
 
     raise ValueError(f"Unknown tool: {name}")

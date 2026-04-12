@@ -44,24 +44,36 @@ class TelegramChannel(NotificationChannel):
         if not chat_id:
             return "telegram: ERROR - chat_id not configured"
 
-        prefix = f"[{priority.upper()}] " if priority in ("high", "urgent") else ""
         safe_subject = html.escape(subject)
         safe_body = html.escape(body)
-        text = f"{prefix}<b>{safe_subject}</b>\n\n{safe_body}"
+
+        # ── Message 1: title (sent separately, catchy) ──────
+        if priority in ("high", "urgent"):
+            title_text = f"🚨 <b>[{priority.upper()}] {safe_subject}</b>"
+        else:
+            title_text = f"✨ <b>{safe_subject}</b>"
 
         url = f"{_TELEGRAM_API_BASE}/bot{token}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": text[:4096],
-            "parse_mode": "HTML",
-        }
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(url, json=payload)
+                # 1. Title message
+                resp = await client.post(url, json={
+                    "chat_id": chat_id,
+                    "text": title_text[:4096],
+                    "parse_mode": "HTML",
+                })
                 resp.raise_for_status()
 
-                # Send image attachments if provided
+                # 2. Body message
+                resp = await client.post(url, json={
+                    "chat_id": chat_id,
+                    "text": safe_body[:4096],
+                    "parse_mode": "HTML",
+                })
+                resp.raise_for_status()
+
+                # 3. Image attachments
                 if attachments:
                     await self._send_images(client, token, chat_id, attachments)
 
