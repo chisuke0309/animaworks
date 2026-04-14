@@ -15,11 +15,11 @@ import os
 import random
 import re
 import uuid
-import urllib.request
 from pathlib import Path
 from typing import Any
 
 from core.tools._base import logger
+from core.tools._image_clients import FalTextToImageClient
 
 # ── Execution Profile ─────────────────────────────────────
 
@@ -44,9 +44,9 @@ NO_TEXT_NEGATIVES = (
     "mutated, malformed, disfigured"
 )
 
-FAL_MODEL = "fal-ai/flux/schnell"
-IMAGE_SIZE = "portrait_16_9"  # 9:16 vertical for TikTok
-NUM_INFERENCE_STEPS = 4
+# 9:16 vertical for TikTok
+_TIKTOK_WIDTH = 768
+_TIKTOK_HEIGHT = 1360
 
 # Cat mascot assets directory
 _CATS_DIR = Path(os.path.expanduser("~/.animaworks/assets/cats"))
@@ -312,31 +312,16 @@ def get_tool_schemas() -> list[dict]:
 
 def _generate_single(prompt: str, output_dir: Path, index: int) -> dict:
     try:
-        import fal_client
-    except ImportError:
-        return {"success": False, "error": "fal-client not installed"}
-
-    neg = NO_TEXT_NEGATIVES
-    arguments = {
-        "prompt": prompt,
-        "image_size": IMAGE_SIZE,
-        "num_inference_steps": NUM_INFERENCE_STEPS,
-        "num_images": 1,
-        "enable_safety_checker": True,
-        "negative_prompt": neg,
-    }
-
-    try:
-        result = fal_client.run(FAL_MODEL, arguments=arguments)
-        images = result.get("images", [])
-        if not images:
-            return {"success": False, "error": f"No images for slide {index + 1}"}
-
-        url = images[0].get("url", "")
-        ext = url.split("?")[0].rsplit(".", 1)[-1] or "png"
-        filename = f"slide_{index + 1}_{uuid.uuid4().hex[:6]}.{ext}"
+        client = FalTextToImageClient()
+        image_bytes = client.generate_fullbody(
+            prompt=prompt,
+            negative_prompt=NO_TEXT_NEGATIVES,
+            width=_TIKTOK_WIDTH,
+            height=_TIKTOK_HEIGHT,
+        )
+        filename = f"slide_{index + 1}_{uuid.uuid4().hex[:6]}.png"
         filepath = output_dir / filename
-        urllib.request.urlretrieve(url, str(filepath))
+        filepath.write_bytes(image_bytes)
         return {"success": True, "path": str(filepath), "slide": index + 1}
     except Exception as e:
         logger.error("Image generation failed for slide %d: %s", index + 1, e)
