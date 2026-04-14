@@ -35,7 +35,14 @@ AI_FILTER_WORDS = ["AI", "GPT", "Claude", "Gemini", "生成", "LLM", "機械学�
                     "ディープラーニング", "Copilot", "OpenAI", "Anthropic", "Google"]
 
 NEWS_RSS_FEEDS = [
-    "https://news.google.com/rss/search?q=生成AI+OR+ChatGPT+OR+Claude+OR+Gemini&hl=ja&gl=JP&ceid=JP:ja",
+    # ITmedia AI（直接記事URL）
+    "https://rss.itmedia.co.jp/rss/2.0/ait.xml",
+    # AINOW（AI専門メディア）
+    "https://ainow.ai/feed/",
+    # Zenn（技術記事、AIタグ含む）
+    "https://zenn.dev/feed",
+    # Gihyo（技術系）
+    "https://gihyo.jp/feed/rss2",
 ]
 
 # ── Tool Schemas ──────────────────────────────────────────
@@ -65,7 +72,8 @@ def get_tool_schemas() -> list[dict]:
         {
             "name": "tiktok_fetch_news",
             "description": (
-                "Google News RSSからAI関連の最新ニュースを取得する。"
+                "AI関連の最新ニュースをRSSから取得する。"
+                "ITmedia AI・AINOW・Zenn・Gihyoから直接記事URLを取得する。"
                 "カルーセル企画のネタ元として使う。"
             ),
             "input_schema": {
