@@ -158,13 +158,14 @@ _WRITING_JOB_KEYWORDS = (
 _IT_JOB_KEYWORDS = (
     "Python", "システム開発", "プログラム", "エンジニア", "開発", "実装", "コーディング",
     "DX推進", "コンサルティング", "PMO", "要件定義",
+    "PM", "WBS", "アドバイザリー", "プロジェクト管理", "業務改善",
+    "プロジェクトマネジメント", "伴走", "プロセス改善",
 )
-# chisukeチームの強みキーワード（スキルマッチ判定用）
-# 夫: AI/DX/IT/Notion/Python系、妻: ライフスタイル/美容/料理/旅行/グルメ系
+# chisukeの強みキーワード（スキルマッチ判定用）— PM/DX/IT専門家
 _SKILL_KEYWORDS = (
-    "AI", "DX", "SEO", "ディレクション", "Notion", "Python", "IT", "生成AI",
-    "ライフスタイル", "美容", "料理", "旅行", "グルメ", "レビュー", "口コミ",
-    "ブログ", "コラム", "記事", "ライティング",
+    "AI", "DX", "ディレクション", "Notion", "Python", "IT", "生成AI",
+    "PM", "PMO", "WBS", "アドバイザリー", "プロジェクト管理", "業務改善",
+    "プロジェクトマネジメント", "伴走", "要件定義", "コンサルティング", "コンサル",
 )
 # 専門職系（資格・免許が必要な専門外ジャンル）— 上書きで3点
 _OFF_TOPIC_KEYWORDS = ("看護", "医療", "介護")
@@ -172,11 +173,31 @@ _OFF_TOPIC_KEYWORDS = ("看護", "医療", "介護")
 _CONTINUITY_KEYWORDS = ("継続", "長期", "専属", "月5本", "月10本", "月20本", "月〜本")
 # AI利用OKキーワード
 _AI_OK_KEYWORDS = ("AI活用", "生成AI", "AIツール", "AI使用OK", "ChatGPT", "Claude", "Gemini")
-# 除外キーワード（スコア0）— 副業のため物理出社・リアルタイム面談不可の案件のみ除外
-# 「業務経験」「実務経験」「経験必須」は除外しない（夫が品質管理するため問題なし）
+# 除外キーワード（スコア0）— タイトル+説明文を対象にチェック
 _EXCLUDE_KEYWORDS = (
-    "ミーティング", "web面談", "Web面談", "zoom", "Zoom", "ZOOM",
-    "meet", "Meet", "面談", "出社", "通勤", "来社",
+    # 物理出社系
+    "出社", "通勤", "来社",
+    # SNS/EC系（PM/PMO対象外）
+    "Instagram", "インスタグラム",
+    "Amazon", "楽天",
+    "TikTok Shop",
+)
+# 除外キーワード（タイトルのみ対象）— 説明文に出てきても除外しない
+# 例: 「エンジニア組織のPMO」→ 説明文にエンジニアが出ても除外しない
+_TITLE_EXCLUDE_KEYWORDS = (
+    # 開発/エンジニア系
+    "エンジニア", "デベロッパー",
+    "データサイエンティスト", "機械学習",
+    # ライティング系
+    "ライター", "ライティング",
+    # 建築/物理現場系
+    "建築", "CAD", "施工",
+    # SNS/マーケ/セールス系
+    "SNSマーケ", "SNS運用",
+    "マーケター", "マーケティング",
+    "インサイドセールス", "セールス",
+    # セキュリティ設計・開発系
+    "セキュリティ",
 )
 
 
@@ -252,13 +273,15 @@ def score_job(job: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     applicants = job.get("applicants", 0) or 0
     deadline = job.get("deadline", "") or ""
 
-    # 除外条件チェック
+    # 除外条件チェック（タイトル+説明文）
     excluded_by: list[str] = [kw for kw in _EXCLUDE_KEYWORDS if kw in text]
-    if excluded_by:
+    # タイトル限定の除外チェック（説明文に出てくるだけでは除外しない）
+    title_excluded_by: list[str] = [kw for kw in _TITLE_EXCLUDE_KEYWORDS if kw in title]
+    if excluded_by or title_excluded_by:
         return 0, {
             "total": 0,
             "excluded": True,
-            "excluded_by": excluded_by,
+            "excluded_by": excluded_by + title_excluded_by,
         }
 
     # ジョブタイプ判定（報酬スコアの閾値切り替えに使用）
@@ -336,7 +359,11 @@ def score_job(job: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             "ライフスタイル", "美容", "料理", "旅行", "グルメ", "レビュー", "口コミ",
             "ブログ", "コラム", "記事", "ライティング", "SEO",
         )
-        it_skill_kws = ("AI", "DX", "ディレクション", "Notion", "Python", "IT", "生成AI")
+        it_skill_kws = (
+            "AI", "DX", "ディレクション", "Notion", "Python", "IT", "生成AI",
+            "PM", "PMO", "WBS", "アドバイザリー", "プロジェクト管理", "業務改善",
+            "プロジェクトマネジメント", "伴走", "要件定義", "コンサル",
+        )
         writing_matches = sum(1 for kw in writing_skill_kws if kw in text)
         it_matches = sum(1 for kw in it_skill_kws if kw in text)
         # 案件タイプに対応するカテゴリのKW数を主スコアに、他カテゴリは補助として加算
@@ -468,9 +495,6 @@ def search_jobs(
         j for j in all_jobs
         if _days_until(j.get("deadline", "")) is None or _days_until(j.get("deadline", "")) >= 0
     ]
-
-    # クライアント本人確認済み案件のみ
-    all_jobs = [j for j in all_jobs if j.get("client_certified")]
 
     logger.info(
         "CrowdWorks search '%s': %d jobs found (pages: %d)",
