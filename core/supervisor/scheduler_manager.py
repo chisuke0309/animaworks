@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEZONE = "Asia/Tokyo"
-_MISFIRE_GRACE_TIME = 300
+_MISFIRE_GRACE_TIME = 3600  # 1h: covers laptop sleep/wake delays
 _MAX_JOB_INSTANCES = 1
 _PIPELINE_REUSE_WINDOW_SEC = 120
 

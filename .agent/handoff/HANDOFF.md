@@ -1,112 +1,86 @@
-# HANDOFF — 2026-04-12 セッション（夜）
+# HANDOFF — 2026-04-19 午前
 
 ## 使用ツール
-Claude Code（Sonnet 4.6）
+Claude Code (Sonnet 4.6)
+
+---
 
 ## 作業対象プロジェクト
-animaworks（knowledge管理改善・ドキュメント更新）
+AnimaWorks — yomi（CrowdWorks案件巡回）の絞り込みフィルタ強化
 
 ---
 
-## 現在のタスクと進捗
+## 今回セッションで実施したこと
 
-### ✅ episodesローテーション自動化
+### 1. yomi昨夜巡回結果の確認
 
-- 毎日03:30 JSTに全animaのepisodes/を7日分のみ保持するcronを実装済み
-- 既存の古いepisodes（04-05以前 + recoveredファイル）を手動で一括削除済み
-- `core/supervisor/_mgr_scheduler.py` に `_run_episodes_rotation()` 追加・登録済み
+- 04-18 20:03 実行：28件ヒット → 24件Notion登録（4件は400エラースキップ）
+- スコア分布: ★★★3件 / ★★11件 / ★9件 / 除外1件
+- 問題: コンサル以外（SNS/EC/エンジニア/建築/マーケ系）が多数混入
 
-### ✅ knowledgeファイル自動ローテーション（Phase 1・2）
+### 2. `core/tools/crowdworks.py` キーワード除外強化
 
-`core/supervisor/_mgr_scheduler.py` に2メソッド追加:
-- `_run_knowledge_rotation()`: 毎日03:35 JST、ファイル名に日付パターン（YYYY-MM-DD / YYYYMMDD）を含むknowledgeファイルを7日後に自動削除（archive/サブディレクトリも対象）
-- `_run_engagement_log_rotation()`: 毎月1日04:00 JST、engagement_log.mdの## YYYY-MM-DDセクションのうち30日超えを削除
+**変更内容**
 
-サーバー再起動後、ログで両cronの登録を確認済み。
+| 追加 | 内容 |
+|------|------|
+| `_EXCLUDE_KEYWORDS` | Instagram / インスタグラム / Amazon / 楽天 / TikTok Shop |
+| `_TITLE_EXCLUDE_KEYWORDS`（新設） | エンジニア / デベロッパー / データサイエンティスト / 機械学習 / ライター / ライティング / 建築 / CAD / 施工 / SNSマーケ / SNS運用 / マーケター / マーケティング / インサイドセールス / セールス / セキュリティ |
+| `score_job` ロジック | タイトル限定除外チェック（`title_excluded_by`）を追加 |
 
-### ✅ 週次knowledge棚卸し（Phase 3）
+**効果**: Notion登録候補 22件 → 6件
 
-- `~/.animaworks/animas/cicchi/cron.md`: 戦略レビュー（月水金）のStep2・Step4に月曜限定の棚卸し指示を追加
-  - rue/kuro/chiro/soraへDMで棚卸し依頼
-  - 棚卸しの本質: 有効な知識をテーマ別統合ファイルに書き直す（単なる要約禁止）
-  - call_human報告に棚卸し結果サマリーを追加
-- `~/.animaworks/animas/maru/cron.md`: 週次レビュー（月曜）に同様の棚卸し指示を追加
-  - tama/chiroへDMで棚卸し依頼
-  - maru自身のknowledge棚卸しも実施
-  - call_humanでTikTok事業部の結果を報告
+### 3. `yomi/procedures/crowdworks-pmo-workflow.md` 更新
 
-### ✅ ドキュメント更新
+- フェーズ3に `score >= 40` フィルタ追加（★以下はNotion登録しない）
+- おすすめ度判定レベルの説明を更新
 
-以下4ファイルに今回の新機能を追記:
-- `docs/memory.md`: Active Forgettingセクション末尾に「Automated Knowledge File Rotation」セクションを新設
-- `docs/memory.ja.md`: 同上の日本語版
-- `docs/features.md`: Post-v0.2 Enhancements → Memory Systemに2エントリ追加
-- `docs/features.ja.md`: 同上の日本語版
+### 4. コミット済み
+
+```
+7c6d554d  fix(crowdworks): PM/PMO案件に特化した除外キーワード強化
+```
 
 ---
 
-## 試したこと・結果
+## Notion登録される案件（今夜から適用）
 
-- ✅ episodesローテーション（03:30 JST）をモデルに、knowledgeローテーション（03:35 JST）を同パターンで実装
-- ✅ 日付パターン: ISO形式 `(\d{4}-\d{2}-\d{2})` を優先、連結形式 `(?<!\d)(\d{8})(?!\d)` をフォールバック
-- ✅ cicchi/maruの両オーケストレーターに棚卸しを組み込み（「maruを忘れるな」というユーザー指摘で修正）
-- ✅ 棚卸しは「要約ではなく有効な情報の再構成」という本質をcron.mdに明記（ユーザー指摘で設計修正）
+| スコア | 案件 |
+|-------|------|
+| ★★★ 74 | AI活用・業務自動化アドバイザー（Claude Codeレクチャー） |
+| ★★★ 66 | PMO 企業内AI導入推進案件（応募1件・固定30万） |
+| ★★★ 65 | 観光DX事業 伴走型CS（時給1,500〜1,700円） |
+| ★★ 54 | プロジェクトサポート・営業推進メンバー |
+| ★★ 49 | AI業務ディレクター |
+| ★★ 47 | PM別荘事業推進 |
+
+---
+
+## Anima稼働状況
+
+| anima | enabled | ロール |
+|-------|---------|--------|
+| cicchi / rue / kuro / sora / hana | false | 元X事業部・停止中 |
+| maru | true | TikTok事業部リーダー |
+| chiro | true | TikTokトレンド調査 |
+| tama | true | TikTokカルーセル制作 |
+| yomi | true | CrowdWorks PM/PMO案件巡回（毎日20:03） |
+| rin / kiri / sumi | false | Kyoka事業部（素材プール完成後に再稼働） |
 
 ---
 
 ## 次のセッションで最初にやること
 
-1. **Xアカウントサスペンド解除確認**
-   解除されたら:
-   - `hana/cron.md`: 4つのscheduleを元に戻す（10:00/15:00/20:00/木17:00）
-   - `cicchi/cron.md`: 3つのscheduleを元に戻す（08:00/17:00/22:00）
-   - `.env`のTWITTER_*が有効か再確認
-
-2. **月曜棚卸しの初回実行確認**（次の月曜 2026-04-13 10:00）
-   - cicchi/maruから各メンバーへ棚卸し指示DMが飛ぶか確認
-   - 各animaがknowledgeファイルを統合・削除して報告するか確認
-
-3. **yomi: CrowdWorks新カテゴリ検討**
-   - 現在のSEO記事巡回は停止中（ヒット少なく一時停止）
-   - 別の案件カテゴリを検討してcron.mdを更新する
-
-4. **caption_prefix初回データ確認**
-   - maruの次回納品後、`post_plan_log.jsonl`にcaption_prefixが入っているか確認
+1. **★★★案件への応募判断** — 特にPMO AI導入案件（応募1人・固定30万）と AI活用アドバイザー（時給4,000円）を優先検討。Notionの「応募する」チェックを入れればyomiが応募文生成
+2. **fork remoteへのpush確認** — 今回の変更（`7c6d554d`）を `fork` remote へ push するか確認
+3. **maruチーム改善方向性** — 「カルーセル形式に限界」の次の方向性をユーザーから聞く
+4. **Kyoka素材バリエーション量産** — reveal/closeup/gesture 各5〜10件
 
 ---
 
 ## 注意点・ブロッカー
 
-- **最大のブロッカー**: @TrinityDox_JP Xアカウントサスペンド中。解除まで投稿・エンゲージメント・計測すべて停止
-- pendingに溜まったコンテンツは復旧後そのまま使えるが、鮮度が落ちる可能性あり
-- 月曜棚卸し初回: cicchi/maruが各animaからの報告を待ってcall_humanを送る設計のため、全メンバーが応答するまでセッションが長くなる可能性あり
-
----
-
-## 変更ファイル一覧
-
-| ファイル | 変更 |
-|----------|------|
-| `core/supervisor/_mgr_scheduler.py` | `_run_knowledge_rotation()` / `_run_engagement_log_rotation()` 追加、`_setup_system_crons()` に登録 |
-| `~/.animaworks/animas/cicchi/cron.md` | Step2・Step4に月曜限定の棚卸し指示を追加 |
-| `~/.animaworks/animas/maru/cron.md` | 週次レビューに月曜限定の棚卸し指示を追加 |
-| `docs/memory.md` | Automated Knowledge File Rotationセクション新設 |
-| `docs/memory.ja.md` | 自動ナレッジファイルローテーションセクション新設 |
-| `docs/features.md` | Memory Systemに2エントリ追加 |
-| `docs/features.ja.md` | 記憶システムに2エントリ追加 |
-
----
-
-## モデル構成
-
-| anima | モデル | ロール |
-|-------|--------|--------|
-| maru | claude-sonnet-4-6 | TikTok事業部リーダー |
-| cicchi | claude-sonnet-4-6 | X事業部オーケストレーター |
-| tama | claude-sonnet-4-6 | カルーセル制作 |
-| chiro | claude-haiku-4-5 | トレンド調査 |
-| kuro | claude-haiku-4-5 | コンテンツ制作 |
-| sora | claude-haiku-4-5 | ビジュアル生成 |
-| hana | claude-haiku-4-5 | エンゲージメント担当 |
-| rue | claude-sonnet-4-6 | ニッチ調査 |
-| yomi | claude-sonnet-4-6 | general |
+- **Notionカテゴリ選択肢**: 昨夜4件が400エラーでスキップ。新カテゴリ（PM/PMO等）がNotionのDBに存在しない可能性あり → 次回巡回後にエラーログ確認
+- **maruチームの改善提案はユーザーから先に聞く** — AIから先回りして提案しない
+- **TikTok Cookie期限**: 次回 2026-10-14頃
+- **Kling v2.5 Turbo Proコスト**: 5秒あたり約$1.75（Kyoka素材量産時は予算管理）

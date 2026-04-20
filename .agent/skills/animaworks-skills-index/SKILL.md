@@ -49,6 +49,7 @@ AnimaWorksのスキルは **3つの異なる場所** に存在し、用途と利
 | **animaworks-new-unit** | 新事業部の新設 | Animaチームを新しく作るとき |
 | **animaworks-genre-change** | X投稿ジャンル変更 | コンテンツテーマを切り替えるとき |
 | **animaworks-promo** | プロモ素材生成 | WEBサイト・資料にAnimaWorksを紹介するとき |
+| **kyoka-video-production** | 鏡花TikTok動画素材生成 | fal.ai Web UIでFLUX+Kling動画を手動生成するとき |
 
 ## 一覧: AnimaWorks内蔵スキル（Anima自身が使う）
 

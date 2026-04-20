@@ -637,7 +637,8 @@ def check_workflow_consistency(files: list[tuple[str, str, str]], report: LintRe
         for line_no, line in enumerate(lines, 1):
             for anima, pat in ROLE_ACTIONS.items():
                 if pat.search(line):
-                    role_mentions[anima].append((path, line_no, line.strip()[:80]))
+                    if anima in role_mentions:
+                        role_mentions[anima].append((path, line_no, line.strip()[:80]))
 
     # 今のところは情報収集のみ（矛盾検出は将来拡張）
     # rueのアクションに「コンテンツ制作」が含まれていたら矛盾など
