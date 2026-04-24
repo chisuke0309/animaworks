@@ -139,7 +139,10 @@ def scrape_tiktok_studio(
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
         context = browser.new_context(
             viewport={"width": 1280, "height": 900},
             locale="ja-JP",
@@ -148,6 +151,10 @@ def scrape_tiktok_studio(
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/125.0.0.0 Safari/537.36"
             ),
+        )
+        # Mask navigator.webdriver to reduce bot detection
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
         context.add_cookies(_format_cookies_for_playwright(cookies))
         page = context.new_page()
@@ -165,7 +172,7 @@ def scrape_tiktok_studio(
                 )
             except Exception:
                 pass  # Proceed anyway — extraction will handle empty case
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(8000)
 
             # Check for login redirect (session expired)
             if "login" in page.url.lower():
@@ -173,6 +180,33 @@ def scrape_tiktok_studio(
                     "セッション切れ: ログインページにリダイレクトされました。"
                     "Chrome拡張でCookieを再エクスポートしてください。"
                 )
+
+            # Scroll the inner content container to load more posts
+            for _ in range(10):
+                current = len(page.query_selector_all('a[href*="/video/"]'))
+                if current >= max_posts:
+                    break
+                # Scroll the first scrollable container that holds the video links
+                scrolled = page.evaluate("""() => {
+                    const link = document.querySelector('a[href*="/video/"]');
+                    if (!link) return false;
+                    let el = link.parentElement;
+                    for (let i = 0; i < 15; i++) {
+                        if (!el) break;
+                        const s = window.getComputedStyle(el);
+                        if ((s.overflow + s.overflowY).match(/scroll|auto/)) {
+                            el.scrollBy(0, el.clientHeight);
+                            return true;
+                        }
+                        el = el.parentElement;
+                    }
+                    window.scrollBy(0, window.innerHeight);
+                    return true;
+                }""")
+                page.wait_for_timeout(2000)
+                after = len(page.query_selector_all('a[href*="/video/"]'))
+                if after == current:
+                    break  # No new posts loaded
 
             posts = _extract_posts(page, max_posts)
             if not posts:

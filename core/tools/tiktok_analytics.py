@@ -390,12 +390,16 @@ def scrape_engagement(args: dict, anima_dir: str | None = None) -> dict:
                 "message": f"セッション切れ: {e}",
             }
         except PageStructureError as e:
-            logger.error("TikTok Studio page structure changed: %s", e)
-            return {
-                "success": False,
-                "error": "page_structure_changed",
-                "message": f"ページ構造変更検出: {e}",
-            }
+            if attempt == 0:
+                logger.warning("TikTok page blank (bot detection?), retrying in 15s: %s", e)
+                import time as _time
+                _time.sleep(15)
+            else:
+                return {
+                    "success": False,
+                    "error": "page_structure_changed",
+                    "message": f"ページ構造変更またはbot検知（リトライ済み）: {e}",
+                }
         except Exception as e:
             if attempt == 0:
                 logger.warning("Scrape attempt 1 failed, retrying: %s", e)

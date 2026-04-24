@@ -224,6 +224,35 @@ class XSearchClient:
             }
         return metrics
 
+    def get_user_metrics(self, username: str) -> dict[str, Any]:
+        """Fetch public metrics for a user by username.
+
+        Args:
+            username: X username without leading ``@``.
+
+        Returns:
+            ``{followers_count, following_count, tweet_count, listed_count,
+            username, user_id}`` dict. Empty dict if the user is not found.
+        """
+        if not username:
+            return {}
+        handle = username.lstrip("@").strip()
+        result = self._request(f"users/by/username/{handle}", {
+            "user.fields": "public_metrics",
+        })
+        data = result.get("data")
+        if not data:
+            return {}
+        pm = data.get("public_metrics", {})
+        return {
+            "user_id": data.get("id", ""),
+            "username": data.get("username", handle),
+            "followers_count": pm.get("followers_count", 0),
+            "following_count": pm.get("following_count", 0),
+            "tweet_count": pm.get("tweet_count", 0),
+            "listed_count": pm.get("listed_count", 0),
+        }
+
 
 # ---------------------------------------------------------------------------
 # Text formatting
