@@ -288,6 +288,32 @@ launchctl kickstart -k gui/$(id -u)/com.animaworks.server
 
 ---
 
+## 共有ブラックボード（Organization-Wide State）
+
+全Animaが読む共有状態ファイル群。KPI現状・マーケット状況・ブロッカー等を一元化し、各Animaの Observe フェーズに自動注入される。
+
+- **配置**: `~/.animaworks/shared/blackboard/*.md`
+- **注入経路**: `core._anima_heartbeat._load_blackboard_snapshot()` が全`.md`を結合し、HBプロンプトの背景文脈に積む（1ファイル8KB / 合計32KB 上限）
+- **更新ツール**: `core.tools.blackboard_writer` (tool name: `blackboard_update_org_status`)。cron `type: command` で呼ぶ
+- **原則**: 書き込みはAnima単位で担当を明確に分ける（例: `organization_status.md` は cicchi の KPI cron が管理）。複数Animaが同じファイルを上書きしない
+
+## Per-Anima Heartbeat テンプレート
+
+HBテンプレートはAnima別にオーバーライド可能。
+
+- 解決順: `heartbeat.<anima_name>.md` → `heartbeat.md`（フォールバック）
+- 実装: `core._anima_heartbeat.HeartbeatMixin._resolve_heartbeat_template_name()`
+- 追加オーバーライドは**テンプレファイルを置くだけで有効**になる（コード改修不要）
+- cicchi のみ `heartbeat.cicchi.md` を使用（5段フロー Observe → Plan → Execute → Verify → Reflect + Contract）
+
+### Contract（明日への約束）
+
+cicchi の5段テンプレが末尾で生成する `[CONTRACT]...[/CONTRACT]` ブロック。activity_log に `heartbeat_contract` タイプで保存され、翌日HBの先頭に `{yesterdays_contract_block}` として再注入される。**episodes には書かない**（フィードバックループ回避）。
+
+### ⚠️ heartbeat_end summary の regex 注意
+
+`_execute_heartbeat_cycle()` L470-475 の regex は `## Observe|Plan|Execute|Verify|Reflect|Contract` ヘッダを全て剥がす設計。新しいフェーズヘッダを追加するなら必ずこの regex を拡張すること。怠ると verbose 出力が episodes → RAG → 翌日プロンプト と自己増殖するフィードバックループが発動する（MEMORY.md 参照）。
+
 ## スキル運用ルール（AnimaWorks固有）
 
 ### プロジェクト固有スキル

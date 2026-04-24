@@ -19,7 +19,7 @@ from core.time_utils import now_iso, now_jst
 from core.memory.conversation import ConversationMemory
 from core.memory.streaming_journal import StreamingJournal
 from core.messenger import InboxItem
-from core.paths import load_prompt
+from core.paths import load_prompt, get_shared_dir
 from core.i18n import t
 from core.schemas import CycleResult
 
@@ -32,7 +32,62 @@ _RE_REFLECTION = re.compile(
     re.DOTALL,
 )
 
+_RE_CONTRACT = re.compile(
+    r"\[CONTRACT\]\s*\n?(.*?)\n?\s*\[/CONTRACT\]",
+    re.DOTALL,
+)
+
 _MIN_REFLECTION_LENGTH = 50
+_MIN_CONTRACT_LENGTH = 8
+
+# ── Feedback-loop sanitizer for heartbeat output ────────────
+#
+# The cicchi 5-stage template produces ``## Observe / Plan / Execute /
+# Verify / Reflect`` (optionally ``+ Contract``) section headers. LLMs also
+# routinely emit variants like ``### Observe``, ``## 🔎 Observe``, ``## ✅
+# Plan（計画）`` etc. If any of these slip into heartbeat_end summaries or
+# episode entries they re-enter the next prompt via RAG / heartbeat_history
+# and the model starts mimicking its own scaffold indefinitely (MEMORY.md).
+#
+# The pattern below matches any markdown heading (``#`` up to ``####``,
+# optionally followed by emoji / CJK punctuation / spaces) where one of the
+# six phase names appears on the same line, and deletes that heading plus
+# all subsequent content. It is deliberately broader than strict
+# ``## Observe`` to tolerate model drift.
+_RE_HB_PHASE_HEADER = re.compile(
+    r"""
+    ^\s*\#{1,4}\s*[^\n]*?            # any heading up to h4 + arbitrary prefix
+    (?:Observe|Plan|Execute|Verify|Reflect|Contract)
+    \b.*                             # everything after the header
+    """,
+    re.DOTALL | re.IGNORECASE | re.MULTILINE | re.VERBOSE,
+)
+
+# Fallback heading patterns without the Markdown ``#``, e.g. bold-only
+# headings like ``**Observe（観察）**`` that Anthropic models sometimes emit.
+_RE_HB_BOLD_PHASE = re.compile(
+    r"^\s*\*\*\s*(?:Observe|Plan|Execute|Verify|Reflect|Contract)\b.*",
+    re.DOTALL | re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _sanitize_hb_summary(raw: str, *, max_len: int = 500) -> str:
+    """Strip multi-stage heartbeat scaffolding from a summary string.
+
+    Returns a length-bounded summary safe to persist into activity_log /
+    episodes without risking the fenced feedback loop. If everything is
+    stripped, returns ``"HEARTBEAT_OK"``.
+    """
+    if not raw:
+        return ""
+    if "HEARTBEAT_OK" in raw:
+        return "HEARTBEAT_OK"
+    stripped = _RE_HB_PHASE_HEADER.sub("", raw)
+    stripped = _RE_HB_BOLD_PHASE.sub("", stripped)
+    stripped = stripped.strip()
+    if not stripped:
+        return "HEARTBEAT_OK"
+    return stripped[:max_len]
 
 
 def _extract_reflection(text: str) -> str:
@@ -45,6 +100,44 @@ def _extract_reflection(text: str) -> str:
     m = _RE_REFLECTION.search(text)
     if m:
         return m.group(1).strip()
+    return ""
+
+
+_CONTRACT_PLACEHOLDER_MARKERS = (
+    "（明日の自分",
+    "明日の自分への1つの具体的改善",
+    "動詞で終える単文",
+    "例: ",
+    "例：",
+)
+
+
+def _extract_contract(text: str) -> str:
+    """Extract [CONTRACT]...[/CONTRACT] block (明日への約束).
+
+    Used by cicchi's 5-stage heartbeat template. Persisted separately in
+    activity_log (type: heartbeat_contract) so it can be re-injected into
+    the next day's heartbeat without going through the episode feedback
+    loop.
+
+    Hardening (Codex review m1):
+    - When multiple blocks exist, prefer the LAST non-empty one. LLMs
+      sometimes repeat the template example verbatim before writing the
+      real contract, so the latter is more likely to be intentional.
+    - Reject blocks whose content still contains the template placeholder
+      markers; return empty string so the caller does NOT store a bogus
+      contract.
+    """
+    if not text:
+        return ""
+    matches = list(_RE_CONTRACT.finditer(text))
+    for m in reversed(matches):
+        candidate = m.group(1).strip()
+        if not candidate:
+            continue
+        if any(marker in candidate for marker in _CONTRACT_PLACEHOLDER_MARKERS):
+            continue
+        return candidate
     return ""
 
 
@@ -113,6 +206,68 @@ class HeartbeatMixin:
             )
             return ""
 
+    # ── Blackboard (shared/blackboard/*.md) ───────────────────
+    #
+    # Caps are in UTF-8 bytes, not characters, to keep Japanese content from
+    # exploding the prompt (Codex review m3). Rough guide: 8 KB ≈ 2,700 JP
+    # chars, 32 KB ≈ 10,000 JP chars.
+    _BLACKBOARD_PER_FILE_CAP_BYTES = 8 * 1024
+    _BLACKBOARD_TOTAL_CAP_BYTES = 32 * 1024
+
+    @staticmethod
+    def _truncate_utf8(body: str, max_bytes: int) -> str:
+        """Truncate ``body`` so its UTF-8 encoding fits in ``max_bytes``.
+
+        Rounds down on any multi-byte character boundary so the output
+        remains valid UTF-8. Appends a short marker if truncation occurred.
+        """
+        encoded = body.encode("utf-8")
+        if len(encoded) <= max_bytes:
+            return body
+        # Decode with errors='ignore' to drop any dangling multi-byte seq.
+        truncated = encoded[:max_bytes].decode("utf-8", errors="ignore")
+        return truncated + "\n\n…(truncated)"
+
+    def _load_blackboard_snapshot(self) -> str:
+        """Read all blackboard files and return a single merged body.
+
+        Each file is capped at 8 KB UTF-8; total output capped at 32 KB
+        UTF-8. Files are sorted by filename (ascending) for deterministic
+        ordering. Missing directory, read errors, and oversized files
+        degrade gracefully to empty string / truncated content with a
+        warning log.
+        """
+        try:
+            bb_dir = get_shared_dir() / "blackboard"
+            if not bb_dir.is_dir():
+                return ""
+            paths = sorted(p for p in bb_dir.iterdir() if p.is_file() and p.suffix == ".md")
+            if not paths:
+                return ""
+            sections: list[str] = []
+            total_bytes = 0
+            for p in paths:
+                try:
+                    body = p.read_text(encoding="utf-8")
+                except Exception:
+                    logger.debug("[%s] Blackboard read failed: %s", self.name, p, exc_info=True)
+                    continue
+                body = self._truncate_utf8(body, self._BLACKBOARD_PER_FILE_CAP_BYTES)
+                section = f"### {p.name}\n\n{body.rstrip()}"
+                section_bytes = len(section.encode("utf-8"))
+                if total_bytes + section_bytes > self._BLACKBOARD_TOTAL_CAP_BYTES:
+                    logger.warning(
+                        "[%s] Blackboard total cap reached; truncating at %s",
+                        self.name, p.name,
+                    )
+                    break
+                sections.append(section)
+                total_bytes += section_bytes
+            return "\n\n".join(sections)
+        except Exception:
+            logger.debug("[%s] Failed to load blackboard", self.name, exc_info=True)
+            return ""
+
     # ── Heartbeat private methods ──────────────────────────
 
     def _build_prior_messages(
@@ -145,6 +300,19 @@ class HeartbeatMixin:
                 logger.info("[%s] Recovery note loaded and removed", self.name)
             except Exception:
                 logger.debug("[%s] Failed to read recovery note", self.name, exc_info=True)
+
+        # ── Blackboard snapshot (organization-wide shared state) ──
+        blackboard_body = self._load_blackboard_snapshot()
+        if blackboard_body:
+            try:
+                header = load_prompt("fragments/blackboard_header")
+            except Exception:
+                logger.debug(
+                    "[%s] blackboard_header fragment missing; using default",
+                    self.name, exc_info=True,
+                )
+                header = "# 共有ブラックボード（Organization-Wide State）"
+            parts.append(header + "\n\n" + blackboard_body)
 
         # Inject pending background task notifications
         bg_notifications = self.drain_background_notifications()
@@ -280,6 +448,64 @@ class HeartbeatMixin:
             logger.debug("[%s] Failed to auto-block stale tasks", self.name, exc_info=True)
             return ""
 
+    def _resolve_heartbeat_template_name(self) -> str:
+        """Return the heartbeat template name, preferring a per-Anima override.
+
+        Looks for ``heartbeat.<anima_name>.md`` first; falls back to the
+        shared ``heartbeat.md``. Makes per-Anima customization opt-in: create
+        the file, no code change required.
+        """
+        per_anima = f"heartbeat.{self.name}"
+        try:
+            # Probe by loading with no substitutions; cache hit is cheap.
+            load_prompt(per_anima)
+            return per_anima
+        except FileNotFoundError:
+            return "heartbeat"
+        except Exception:
+            logger.debug(
+                "[%s] Per-Anima heartbeat template probe failed; using shared",
+                self.name, exc_info=True,
+            )
+            return "heartbeat"
+
+    def _load_latest_contract(self) -> str:
+        """Load the Contract (明日への約束) written before today.
+
+        The contract is meant as "a promise from yesterday to today". If
+        cicchi runs heartbeat twice in the same day, the earlier run's
+        contract is NOT yet due to be treated as "yesterday's"; otherwise
+        the afternoon HB would read the morning's contract as if it had
+        already passed (Codex review M4).
+
+        We therefore filter by date boundary: return the newest contract
+        strictly before today's local (JST) date.
+
+        Pulled from activity_log (not episodes) to avoid the feedback loop.
+        ``ActivityLog.recent`` returns chronological (oldest-first) order, so
+        we iterate in reverse to find the most recent qualifying entry.
+        """
+        try:
+            today_iso = now_jst().date().isoformat()
+            entries = self._activity.recent(
+                days=7,
+                types=["heartbeat_contract"],
+                limit=20,
+            )
+            for e in reversed(entries):
+                # activity_log stores ts in ISO format; take the YYYY-MM-DD
+                # prefix for a robust date comparison.
+                entry_date = (e.ts or "")[:10]
+                if entry_date and entry_date < today_iso:
+                    return (e.content or e.summary or "").strip()
+            return ""
+        except Exception:
+            logger.debug(
+                "[%s] Failed to load latest contract",
+                self.name, exc_info=True,
+            )
+            return ""
+
     async def _build_heartbeat_prompt(self) -> list[str]:
         """Build heartbeat prompt parts.
 
@@ -289,7 +515,40 @@ class HeartbeatMixin:
         hb_config = self.memory.read_heartbeat_config()
         checklist = hb_config or load_prompt("heartbeat_default_checklist")
         task_delegation_rules = load_prompt("task_delegation_rules")
-        parts = [load_prompt("heartbeat", checklist=checklist, task_delegation_rules=task_delegation_rules)]
+
+        template_name = self._resolve_heartbeat_template_name()
+
+        # Only cicchi's 5-stage template renders the contract block. Other
+        # templates ignore the kwarg thanks to SafeFormatDict.
+        yesterdays_contract_block = ""
+        if template_name != "heartbeat":
+            contract = self._load_latest_contract()
+            if contract:
+                yesterdays_contract_block = (
+                    "## 昨日の自分からの約束（Contract）\n\n"
+                    f"> {contract}\n\n"
+                    "**Planフェーズの冒頭で必ずこの約束を参照し、"
+                    "Verifyで遵守度を評価すること。**"
+                )
+
+        try:
+            header = load_prompt(
+                template_name,
+                checklist=checklist,
+                task_delegation_rules=task_delegation_rules,
+                yesterdays_contract_block=yesterdays_contract_block,
+            )
+        except Exception:
+            logger.warning(
+                "[%s] Per-Anima template %r failed; falling back to shared heartbeat",
+                self.name, template_name, exc_info=True,
+            )
+            header = load_prompt(
+                "heartbeat",
+                checklist=checklist,
+                task_delegation_rules=task_delegation_rules,
+            )
+        parts = [header]
 
         # Auto-block tasks stuck for 2+ hours and notify LLM
         stale_notification = self._handle_stale_task_auto_blocking()
@@ -453,19 +712,12 @@ class HeartbeatMixin:
 
             self._last_activity = now_jst()
 
-            # Activity log: heartbeat end
-            # Strip verbose O/P/R output before saving to prevent feedback loop
-            _hb_summary = result.summary or ""
-            if "HEARTBEAT_OK" in _hb_summary:
-                _hb_summary = "HEARTBEAT_OK"
-            elif _hb_summary:
-                import re as _re
-                _hb_summary = _re.sub(
-                    r"##\s*(?:Observe|Plan|Reflect)(?:（[^）]*）)?\b.*",
-                    "",
-                    _hb_summary,
-                    flags=_re.DOTALL | _re.IGNORECASE,
-                ).strip()[:200] or _hb_summary[:200]
+            # Activity log: heartbeat end.
+            # Strip multi-stage scaffolding before persisting to activity_log
+            # AND to episodes (next step). Both paths route to the next HB's
+            # prompt (activity_log via heartbeat_history, episodes via RAG),
+            # so they must use the same sanitiser.
+            _hb_summary = _sanitize_hb_summary(result.summary or "", max_len=200)
             self._activity.log("heartbeat_end", summary=_hb_summary)
 
             # Session boundary: finalize pending conversation turns
@@ -475,13 +727,18 @@ class HeartbeatMixin:
             except Exception:
                 logger.debug("[%s] finalize_if_session_ended failed", self.name, exc_info=True)
 
-            # A-3: Record important heartbeat actions to episodes
-            if result.summary and "HEARTBEAT_OK" not in result.summary:
+            # A-3: Record important heartbeat actions to episodes.
+            # Same sanitiser as heartbeat_end — episodes feed RAG which feeds
+            # the next prompt, so verbose scaffolding must NOT leak here
+            # either. ``_hb_summary`` (already sanitised at max_len=200) is a
+            # no-op if it collapsed to HEARTBEAT_OK.
+            _episode_summary = _sanitize_hb_summary(result.summary or "", max_len=500)
+            if _episode_summary and _episode_summary != "HEARTBEAT_OK":
                 ts = now_jst().strftime("%H:%M")
                 episode_entry = t(
                     "anima.heartbeat_episode",
                     ts=ts,
-                    summary=result.summary[:500],
+                    summary=_episode_summary,
                 )
                 if unread_count > 0:
                     episode_entry += t("anima.heartbeat_msgs_processed", count=unread_count)
@@ -499,6 +756,19 @@ class HeartbeatMixin:
                         "heartbeat_reflection",
                         content=reflection_text,
                         summary=reflection_text[:200],
+                    )
+
+                # A-3c: Extract and record Contract (明日への約束)
+                # Contract is persisted to activity_log only — NOT to episodes —
+                # so the next day's heartbeat can re-inject it without going
+                # through RAG. This deliberately sidesteps the episode feedback
+                # loop documented in MEMORY.md.
+                contract_text = _extract_contract(accumulated_text)
+                if contract_text and len(contract_text) >= _MIN_CONTRACT_LENGTH and _hb_summary != "HEARTBEAT_OK":
+                    self._activity.log(
+                        "heartbeat_contract",
+                        content=contract_text,
+                        summary=contract_text[:200],
                     )
 
                 try:
