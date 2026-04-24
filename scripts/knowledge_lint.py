@@ -76,6 +76,7 @@ VALID_TOOL_NAMES = {
     "task_tracker", "transcribe_audio", "update_task", "web_fetch",
     "web_search", "write_file", "write_memory_file", "x_post",
     "x_post_thread", "x_post_save_pending", "x_post_execute_pending",
+    "x_post_cancel_pending",
     "x_search", "x_user_tweets", "x_post_update_engagement",
     "x_like", "x_reply", "x_quote",
     "tiktok_analytics",
@@ -90,7 +91,6 @@ VALID_TOOL_NAMES = {
 # applicable_animas=None のとき全Anima対象。リストを指定するとそのAnima配下のみ対象。
 DEPRECATED_TERMS: dict[str, tuple[str, str, list[str] | None]] = {
     "x_post_request_approval": ("critical", "このツールは存在しない。x_post + cron自動投稿フローに移行済み", None),
-    "x_post_cancel_pending": ("critical", "このツール名はコードに未実装", None),
     "4連投": ("critical", "長文単一投稿（X Premium 25,000文字）に移行済み", None),
     # X事業部（cicchi/rue/kuro/sora/hana）のみ対象。TikTok事業部（maru/chiro/tama）はAI系ニッチを継続中。
     "AI・DX領域": ("warning", "X事業部はペット・グルーミング/エコ・サステナブルに移行済み（旧ミッション残留の可能性）", ["cicchi", "rue", "kuro", "sora", "hana"]),

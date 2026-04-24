@@ -701,6 +701,48 @@ def execute_pending_posts(slot: str, anima_dir: str = "") -> dict:
     }
 
 
+def cancel_pending_posts(slot: str) -> dict:
+    """Cancel (delete) all pending posts for a given slot.
+
+    Removes every pending JSON file whose ``slot`` field matches.
+    Used when the human rejects a draft via LLM reply ("NG", "キャンセル" etc).
+    """
+    _ensure_pending_dir()
+    cancelled: list[dict] = []
+    errors: list[dict] = []
+
+    for filepath in sorted(PENDING_DIR.glob("*.json")):
+        try:
+            draft = json.loads(filepath.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if draft.get("slot") != slot:
+            continue
+        try:
+            filepath.unlink()
+            cancelled.append({
+                "id": draft.get("id", filepath.stem),
+                "status": draft.get("status", ""),
+                "text_preview": (draft.get("text") or "")[:80],
+            })
+            logger.info("Pending post cancelled: %s (slot=%s)", draft.get("id"), slot)
+        except OSError as e:
+            errors.append({"id": draft.get("id", filepath.stem), "error": str(e)})
+
+    return {
+        "success": len(errors) == 0,
+        "slot": slot,
+        "cancelled": cancelled,
+        "cancelled_count": len(cancelled),
+        "errors": errors,
+        "message": (
+            f"{len(cancelled)} pending post(s) cancelled for slot '{slot}'"
+            if cancelled
+            else f"No pending posts to cancel for slot '{slot}'"
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Engagement feedback helpers
 # ---------------------------------------------------------------------------
@@ -894,6 +936,24 @@ def get_tool_schemas() -> list[dict]:
             },
         },
         {
+            "name": "x_post_cancel_pending",
+            "description": (
+                "Cancel (delete) all pending posts for a given time slot. "
+                "Use when the human rejects a draft ('NG', 'キャンセル', 'やめて' etc). "
+                "Removes every pending file in the slot regardless of approval state."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "slot": {
+                        "type": "string",
+                        "description": "Time slot to cancel (e.g. 'morning', 'evening').",
+                    },
+                },
+                "required": ["slot"],
+            },
+        },
+        {
             "name": "x_post_update_engagement",
             "description": (
                 "Fetch engagement metrics (likes, RTs, impressions) for recent tweets "
@@ -925,6 +985,9 @@ def dispatch(name: str, args: dict[str, Any]) -> Any:
     if name == "x_post_execute_pending":
         anima_dir = args.get("anima_dir", "")
         return execute_pending_posts(slot=args["slot"], anima_dir=anima_dir)
+
+    if name == "x_post_cancel_pending":
+        return cancel_pending_posts(slot=args["slot"])
 
     if name == "x_post_update_engagement":
         anima_dir = args.get("anima_dir", "")
