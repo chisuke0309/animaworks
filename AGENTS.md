@@ -53,9 +53,16 @@ AnimaWorksを構成する重要ファイルの一覧。**新しいセッショ�
 | ファイル | 役割 |
 |---------|------|
 | `AGENTS.md`（本ファイル） | プロジェクトルール・仕様・チェックリスト |
-| `.agent/handoff/HANDOFF.md` | 直近セッションの引き継ぎ |
+| `.agent/handoff/HANDOFF.md` | 直近セッションの引き継ぎ（何をしたか） |
+| `.agent/units/kyoka_unit.md` | Kyoka事業部の戦略・在庫・次のアクション |
+| `.agent/units/x_unit.md` | X事業部の戦略・KPI・次のアクション |
+| `.agent/units/tiktok_unit.md` | TikTok事業部の戦略・次のアクション |
+| `.agent/units/crowdworks_unit.md` | CrowdWorks事業部の戦略・次のアクション |
 | `.claude/commands/handoff.md` | `/handoff` コマンドの仕様 |
 | `.agent/skills/` | Claude Code向け運用スキル |
+
+> **セッション開始時**: HANDOFF.md（前回操作）＋ 関連する unit/*.md（事業部現在地）を必ず読むこと。
+> **セッション終了時**: 作業した事業部の unit/*.md を更新してから HANDOFF.md を書くこと。
 
 ---
 
