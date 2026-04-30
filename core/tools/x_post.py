@@ -840,8 +840,8 @@ def update_engagement(anima_dir: str) -> dict[str, Any]:
         tid = cols[3]
         if not tid.isdigit():
             continue
-        # Check if any metric is still "-"
-        if "-" in (cols[4], cols[5], cols[6]):
+        # Check if any metric is still "-" or "—" (em-dash written by LLM agents)
+        if any(c in ("-", "—") for c in (cols[4], cols[5], cols[6])):
             ids_to_fetch.append(tid)
             row_indices[tid] = i
 
