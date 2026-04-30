@@ -76,11 +76,13 @@ def _oauth1_header(
     api_secret: str,
     access_token: str,
     access_token_secret: str,
+    body_params: dict[str, str] | None = None,
 ) -> str:
-    """Build an OAuth 1.0a Authorization header for X API v2.
+    """Build an OAuth 1.0a Authorization header.
 
-    X API v2 uses JSON body — body params are NOT included in the signature.
-    Only OAuth header params are signed.
+    For X API v2 (JSON body): pass no body_params — body is excluded from signature.
+    For X API v1.1 form POST (e.g. media/upload): pass body_params so they are
+    included in the signature base string as required by OAuth 1.0a RFC 5849.
     """
     oauth_params = {
         "oauth_consumer_key": api_key,
@@ -91,10 +93,15 @@ def _oauth1_header(
         "oauth_version": "1.0",
     }
 
+    # For form-encoded POST (v1.1), body params must be included in the signature.
+    all_sig_params = dict(oauth_params)
+    if body_params:
+        all_sig_params.update(body_params)
+
     # Percent-encode each key and value, then sort alphabetically
     encoded = {
         urllib.parse.quote(k, safe=""): urllib.parse.quote(v, safe="")
-        for k, v in oauth_params.items()
+        for k, v in all_sig_params.items()
     }
     param_string = "&".join(
         f"{k}={v}" for k, v in sorted(encoded.items())
@@ -220,6 +227,7 @@ class XPostClient:
             api_secret=self.api_secret,
             access_token=self.access_token,
             access_token_secret=self.access_token_secret,
+            body_params={"media_data": media_data},
         )
         response = httpx.post(
             self.MEDIA_UPLOAD_URL,
@@ -556,6 +564,25 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
     except Exception:
         logger.debug("Dedup check failed, proceeding with save", exc_info=True)
 
+    # ── Approved-slot conflict: force 'pending' if an approved post already exists for this slot ──
+    # Prevents queue backup where multiple approved posts accumulate and only the oldest ever runs.
+    _has_approved_in_slot = False
+    _conflict_id = ""
+    try:
+        for _existing_file in sorted(PENDING_DIR.glob("*.json")):
+            _existing = json.loads(_existing_file.read_text(encoding="utf-8"))
+            if _existing.get("status") == "approved" and _existing.get("slot") == slot:
+                _has_approved_in_slot = True
+                _conflict_id = _existing.get("id", "?")
+                logger.warning(
+                    "Approved post already exists for slot '%s' (id=%s). "
+                    "New post will be forced to 'pending' to prevent queue backup.",
+                    slot, _conflict_id,
+                )
+                break
+    except Exception:
+        logger.debug("Approved-slot conflict check failed, proceeding normally", exc_info=True)
+
     # Score before saving
     scoring = _score_post(text)
     gate = scoring["gate"]
@@ -581,6 +608,12 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
             "scores": scoring["scores"],
             "message": f"投稿は品質スコアにより棄却されました: {scoring['gate_reason']}",
         }
+
+    # Force pending if another approved post is already waiting for this slot
+    if _has_approved_in_slot and gate == "auto_approved":
+        gate = "pending"
+        scoring["gate"] = "pending"
+        scoring["gate_reason"] = f"承認済み投稿が残存（{_conflict_id}）— キュー詰まり防止のため人間レビュー待ちに変更"
 
     status = "approved" if gate == "auto_approved" else "pending"
 
@@ -617,6 +650,12 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
     # Send Telegram notification for approval (skip for auto-approved)
     if status == "pending":
         _notify_pending_post(draft_id, text, slot, anima, scoring)
+        if _has_approved_in_slot:
+            logger.warning(
+                "Slot '%s' conflict: new post saved as pending (conflict with %s). "
+                "Approve existing post first, or delete it before approving this one.",
+                slot, _conflict_id,
+            )
     else:
         _notify_pending_post(draft_id, text, slot, anima, scoring, auto_approved=True)
 
