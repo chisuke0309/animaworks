@@ -1,9 +1,6 @@
 ---
 name: animaworks-new-unit
-description: >
-  AnimaWorksに新しい事業部（Anima チーム）を新設するためのスキル。
-  Anima設定ファイル作成、cron.md記法、ツール移行、Telegram Bot分離、UI対応を網羅。
-  TikTok事業部（maru/chiro/tama）新設の実績に基づく。
+description: "Provides step-by-step procedures to create a new AnimaWorks business unit (Anima team), covering Anima config files, cron.md syntax, tool migration, Telegram Bot separation, and UI setup. Use when adding a new business unit to AnimaWorks or assembling a new team of three or more Anima agents."
 metadata:
   model: sonnet
 risk: medium

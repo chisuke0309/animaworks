@@ -1,129 +1,96 @@
-# HANDOFF - 2026-04-28（夜・セッション終了）
+# HANDOFF — 2026-05-06 13:25
 
 ## 使用ツール
-Claude Code（Sonnet 4.6 に切り替え済み）
+
+Claude Code（VSCode拡張・Opus 4.7 1M context）
 
 ## 作業対象プロジェクト
-AnimaWorks — Kyoka事業部 自律パイプライン実装（P2 完了・P3 待ち）
 
----
+**animaworks** — 業務AI 体制での X 投稿テストと、cicchi 事業部の情報源強化
 
-## 本日の達成
+## 現在のタスクと進捗
 
-### 1. TikTok / Instagram 初投稿
-- TikTok `@kyokakisaragi` / Instagram `@kyokakisaragi.ai` 開設
-- scenario_003（青もみじの古刹）を両プラットフォームに同日投稿・審査通過
-- Notion DB / video_inventory.md / kyoka_unit.md 更新済み
+- [x] **rue 調査ツール群の実動作確認**: bird CLI / Exa / Jina Reader / mcporter / web_search は OK、yt-dlp（YouTube 署名失敗）と Reddit JSON（403）は使用不可と判明 → injection から削除
+- [x] **ai-research-hub を rue の一次ソースに位置付け**: 既存リポジトリ `~/Projects/ai-research-hub/`（毎朝6:48 までに5ソースを Obsidian Vault に保存）への参照を組み込み
+- [x] **`topic_selection_criteria.md` 新規作成**: 4層スコアリング（必須フィルター → 5軸×5点採点 → ジャンル偏り回避 → 最終判断、15点以上で候補）
+- [x] **cicchi cron.md / injection.md / agent-reach-tools.md / rue injection.md / 両 permissions.md 更新**: ai-research-hub 参照フロー全面導入
+- [x] **X プロフィール書き換え案を提示**（chisuke が反映済み）
+- [x] **Substack 兼用ヘッダー画像プロンプト3案を提示**（3:1 / 1500×500、左下プロフィール画像との重なり配慮）
+- [x] **業務AI 体制での第1号テスト投稿を完成**: ネタ選定（GitLab AIパラドックス、スコア25/25満点）→ 構成案 → 本文（フックB案・718文字）→ 画像（FLUX 16:9 + Pillow 日本語オーバーレイ）→ pending保存（id `20260506T131722_evening`、品質9.3/10）→ 承認 API 経由で approved に
+- [x] **旧体制（ペット）の pending 2本を削除**: `20260430T211122_morning`（パピヨン）/ `20260430T213350_evening`（パピヨン）
+- [x] **unit ファイル更新**: `x_unit.md`（業務AI 体制での初投稿準備完了・教訓追記）
 
-### 2. P2 パイプライン実装完了
-新規ツール（**未コミット**）：
-- `core/tools/kyoka_image.py` — gpt-image-1 ラッパー（将来用・現在は画像生成に呼び出さない）
-- `core/tools/_kyoka_prompt_template.py` — 固定キャラ仕様・プロンプト組み立て・validator
-- `core/tools/kyoka_pipeline.py` — シナリオ生成LLM → Notion登録の一気通貫
+## 試したこと・結果
 
-### 3. 方針転換（重要）
-**API コスト問題（本日だけで $6 消費）のため、画像生成は自動化しない。**
+### ✅ 成功
 
-| 工程 | 担当 |
-|------|------|
-| トレンド調査・テーマ決定 | kiri/rin（Anima・自動） |
-| シナリオ生成・プロンプト生成 | kyoka_pipeline（LLM・自動） |
-| Notion 全フィールド登録 | kyoka_pipeline（自動） |
-| **6フレーム画像生成** | **chisuke 手動（ChatGPT GUI）** |
-| 動画生成（Seedance） | chisuke 手動 |
-| 投稿 | chisuke 手動 |
+- **rue 調査ツール実動作テスト**: bird search で業務AI 投稿が即取得、Exa で「パナソニック18.6万時間削減」など定量データ即取得、Jina Reader で Anthropic News を Markdown 化、mcporter で5サーバー稼働確認
+- **ai-research-hub 連携**: chisuke 既存リポジトリの出力を rue の最優先情報源に位置付け、ハルシネーション抑制 + 検索負荷軽減を狙った設計に変更
+- **topic_selection_criteria.md による初スコアリング**: 5ファイル → 上位3候補抽出 → GitLab AIパラドックスが25/25満点で採用
+- **画像生成2段階フロー**: FLUX で「ツール散乱」風の抽象背景を生成 → Pillow で「週7時間が消えている。/ GitLabが指摘するAIパラドックス」を白文字中央オーバーレイ → 約558KBの完成画像
+- **`x_post_save_pending` 直接呼び出し**: Python 関数を直接 import して呼び、品質スコア9.3/10 で pending 保存成功
+- **承認 API**: `POST /api/approvals/posts/{id}/approve` で approved に切り替え成功
 
-`kyoka_image.py` は将来のために残す（コスト問題が解決したら再活用）。
+### ❌ 失敗・気づき
 
-### 4. scenario_004/005 の Notion プロンプト更新済み
-Gemini の分析で判明した構造的問題（参照画像の強制拘束が frame_prompts から欠落）を修正。
-
-#### 修正内容（`_kyoka_prompt_template.py`）
-- `FRAME_PROMPT_PREFIX` に `[Reference image uploaded: portrait of a Japanese woman named Kyoka]` と `CRITICAL: Match the reference image's exact face shape, sharp jawline, youthful structure...` を追加
-- `KYOKA_FIXED_CHARACTER_SPEC` に年齢・骨格明示を追加：`Age: late twenties — preserve youthful firmness, sharp jawline. Do NOT round the face.`
-- `FORBIDDEN_TERMS` から否定形で使われる語（furrowed/scowl 等）を削除し、本当に問題の語（fierce/angry/grim）だけに絞った
-
-#### 更新済み Notion レコード
-- scenario_004「鏡花、梅雨の縁側に端居す」: https://www.notion.so/kyoka_scenario_004-3501158c25dc816e84a9e80aa32a4ea4
-- scenario_005「鏡花、月明かりの床の間に座す」: https://www.notion.so/kyoka_scenario_005-3501158c25dc812aa0a3c86e917d6fd2
-
-### 5. アカウント情報（kyoka_unit.md に記録済み）
-- TikTok: `@kyokakisaragi`
-- Instagram: `@kyokakisaragi.ai`
-- Google アカウント: macOS キーチェーン参照
-- Bio: `鏡花 — Kyoka / She walks where gods still linger. / 🎋 Kyoka — Japanese mystery × AI`
-
----
+- **`.venv/bin/python` では fal_client が未インストール**: シンボリックリンクで miniforge を指していても site-packages は別。`/opt/homebrew/Caskroom/miniforge/base/bin/python` を直接呼ぶ必要あり。`Pillow` も同様で `pip install Pillow` を miniforge 側に実施
+- **承認 API パスを最初に間違えた**: `/approvals/posts/...` で 405。正しくは `/api/approvals/posts/.../approve`。`/openapi.json` で確認可能
+- **同 slot に approved が残っていると新規 pending が強制 pending 化される**: queue backup 防止の安全装置。旧体制の approved 投稿（パピヨン）が残っていたため最初は強制 pending になった → 旧体制の pending 2本を削除して解消
+- **生成途中で背景画像が一度消失**: tmp ディレクトリの `.DS_Store` 以外が消えていた（原因不明、誰かのクリーンアップ動作？）→ 再生成して対応
+- **FLUX に日本語直書きさせるのは無理**: 過去の sora ノウハウ通り、FLUX 背景 + Pillow オーバーレイの2段階が定石
 
 ## 次のセッションで最初にやること
 
-### 1. scenario_004/005 の画像生成確認（chisuke 手動）
-ChatGPT GUI で以下の手順：
-1. Notion の scenario_004 or 005 を開く
-2. **「GPT Image Prompt」フィールド**をコピー
-3. `kyoka_closeup_001_start.jpg` を参照画像としてアップロード（`~/.animaworks/common_knowledge/tiktok_templates/kyoka/assets/`）
-4. プロンプトを貼り付けて画像生成
-5. 品質OK → P3 着手 / NG → プロンプト追加修正
+（このセッションで完了。次回のタスクは未定）
 
-### 2. 品質OKなら P2 をコミット & push
-```bash
-# P1 テストファイルを先に破棄
-rm -f ~/Projects/animaworks/scripts/kyoka_image_test.py
-rm -f ~/Projects/animaworks/scripts/_kyoka_p1_prompts.json
-rm -rf ~/Projects/animaworks/tmp/
+ただし時系列で発生する確認事項：
 
-# コミット対象
-git add core/tools/kyoka_image.py
-git add core/tools/_kyoka_prompt_template.py
-git add core/tools/kyoka_pipeline.py
-git add .agent/  # units/ / handoff/ の更新
+1. **本日17:00 に第1号投稿が自動発射されるはず**（cron `x_post_execute_pending slot=evening`）— pending JSON の status が `posted` になり tweet_id が記録されているか
+2. **22:00 にエンゲージメント計測**（cron `x_post_update_engagement`）— impressions / likes / RTs
 
-git commit -m "feat(kyoka): P2 pipeline — scenario generation + Notion registration (images manual)"
-git push fork main
-```
+## 注意点・ブロッカー
 
-### 3. P3 着手（cicchi 構造を Kyoka に複製）
-詳細は `/Users/chisuke/.claude/plans/c-ok-anima-dynamic-blum.md` 参照。
+- **本日17:00 発射予定の第1号投稿**: id `20260506T131722_evening`、status `approved`、業務AI 体制での記念すべき1本目。失敗した場合は `~/.animaworks/logs/` を確認
+- **cicchi 事業部 5 体は依然 enabled: false**: 今回の投稿は私（Claude）が代行で `save_pending_post` を直接呼んだ。Anima 駆動での自動投稿は次回以降の検証
+- **maru 事業部は稼働継続**: cicchi 事業部を再稼働させる際は maru と並行になる
+- **AnimaWorks サーバー**: launchd `com.animaworks.server` PID 99873 / port 18500 で稼働中
+- **ai-research-hub への依存**: 毎朝6:00 launchd（`com.trinitydox.ai-research-hub`）が動く前提。停止すると rue が一次ソースを失う
+- **fal_client / Pillow は miniforge python のみ**: Anima が Bash 経由で画像生成するときは `/opt/homebrew/Caskroom/miniforge/base/bin/python` を使う必要あり
+- **承認済みが同 slot に残っていると queue backup**: 新規 pending が強制 pending 化される。古い approved を消してから新しいものを承認するルール
+- **ハンドオフに機密情報を書かない**（auto-memory 既知）— 本ファイルにも API キー・トークン等は記載していない
 
-優先順：
-1. rin/kiri/sumi に `heartbeat.md`（cicchi 構造を踏襲）作成
-2. rin の knowledge 初版：`weekly_strategy.md` / `theme_registry.md` / `tiktok_log.md`
-3. kiri の knowledge 初版：`market_pulse_kyoka.md`
-4. `shared/blackboard/kyoka_status.md` + `blackboard_writer.py` 拡張
-5. rin/kiri/sumi の `injection.md` / `cron.md` / `permissions.md` を P3 用に更新
-6. `status.json` 全員 `enabled: true`
-7. lint + cron パース + サーバー再起動 + 動作確認
+## 変更ファイル一覧
 
----
+### 新規作成
 
-## 注意点
+- `~/.animaworks/animas/cicchi/knowledge/topic_selection_criteria.md`（4層スコアリング選定基準）
+- `~/.animaworks/tmp/x_image_20260506_evening_bg.png`（FLUX 背景）
+- `~/.animaworks/tmp/x_image_20260506_evening.png`（オーバーレイ済み完成画像）
+- `~/.animaworks/pending_posts/20260506T131722_evening.json`（業務AI 体制 第1号投稿）
 
-### コスト管理
-- kyoka_pipeline は LLM（claude-sonnet）のみ使用 → 1シナリオ約 $0.02
-- 画像生成は ChatGPT GUI（月額プランの範囲内）
-- gpt-image-1 API は kyoka_image.py に保持するが**呼び出さない**
+### 編集
 
-### Anthropic API キー
-- `.env` と `~/.animaworks/config.json` の `credentials.anthropic.api_key` 両方を更新済み（2026-04-28）
-- 次回ローテート時は**両方**を必ず更新すること
+- `~/.animaworks/animas/cicchi/cron.md`（rue 委任プロンプトを ai-research-hub 参照フローに刷新）
+- `~/.animaworks/animas/cicchi/injection.md`（参照ファイル一覧を再構成）
+- `~/.animaworks/animas/cicchi/permissions.md`（リサーチディレクトリ Read 権限追加）
+- `~/.animaworks/animas/cicchi/knowledge/agent-reach-tools.md`（ai-research-hub を一次ソースとして再構成）
+- `~/.animaworks/animas/rue/injection.md`（委任受領時の必須参照ファイル4点を追加、Reddit/yt-dlp 削除）
+- `~/.animaworks/animas/rue/permissions.md`（リサーチディレクトリ Read 権限追加）
+- `.agent/units/x_unit.md`（業務AI 体制初投稿の記録・教訓追記）
 
-### Notion インテグレーション
-- Kyoka Scenarios DB（f1d407fcb3d94ca78cd81ddbe2c11d67）に AnimaWorks インテグレーションを接続済み（2026-04-28）
+### 削除
 
-### モデル
-- Claude Code のモデルは **Sonnet 4.6** に切り替え済み（`/model sonnet[1m]`）
+- `~/.animaworks/pending_posts/20260430T211122_morning.json`（旧体制パピヨン）
+- `~/.animaworks/pending_posts/20260430T213350_evening.json`（旧体制パピヨン）
 
----
+## サーバー状態
 
-## 関連ファイル
+- launchd `com.animaworks.server` 稼働中（PID 99873）
+- launchd `com.trinitydox.ai-research-hub` 稼働中（毎朝6:00、5ファイル出力）
+- HTTP `http://localhost:18500` ヘルスチェック OK
+- 稼働 Anima: maru / chiro / tama
+- 停止 Anima: cicchi / kuro / rue / sora / hana
 
-| ファイル | 内容 |
-|---------|------|
-| `~/.claude/plans/c-ok-anima-dynamic-blum.md` | P2/P3 全体実装計画 |
-| `core/tools/kyoka_image.py` | gpt-image-1 ラッパー（将来用・現在呼び出しなし） |
-| `core/tools/_kyoka_prompt_template.py` | **キャラ仕様の正規化ファイル・画像品質の要** |
-| `core/tools/kyoka_pipeline.py` | シナリオ生成→Notion登録 |
-| `~/.animaworks/common_knowledge/tiktok_templates/kyoka/assets/kyoka_closeup_001_start.jpg` | 参照画像（顔の基準） |
-| `~/.animaworks/animas/cicchi/heartbeat.md` | P3 で rin 用 heartbeat の雛形 |
-| `~/.animaworks/animas/cicchi/knowledge/weekly_strategy.md` | rin 用 weekly_strategy の雛形 |
-| Notion Kyoka Scenarios DB | https://www.notion.so/f1d407fcb3d94ca78cd81ddbe2c11d67 |
+## Knowledge Lint レポート
+
+knowledge_lint critical 0 / warning 0（53ファイルスキャン）。知識矛盾なし ✅

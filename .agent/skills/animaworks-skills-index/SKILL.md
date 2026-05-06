@@ -1,9 +1,6 @@
 ---
 name: animaworks-skills-index
-description: >
-  AnimaWorks関連の全スキルの目次。スキルは3箇所に分散しているため、
-  AnimaWorksの作業を始める前にこのインデックスを確認し、関連スキルを参照すること。
-  「animaworks」「anima」「事業部」「投稿」「cron」「ツール」等の作業で使用。
+description: "Provides an index of all AnimaWorks-related skills distributed across three locations (.agent/skills/, common_skills/, animas/{name}/skills/). Use when starting any AnimaWorks task, looking up available skills, or registering a newly created skill in the index."
 metadata:
   model: haiku
 risk: low
@@ -49,7 +46,9 @@ AnimaWorksのスキルは **3つの異なる場所** に存在し、用途と利
 | **animaworks-new-unit** | 新事業部の新設 | Animaチームを新しく作るとき |
 | **animaworks-genre-change** | X投稿ジャンル変更 | コンテンツテーマを切り替えるとき |
 | **animaworks-promo** | プロモ素材生成 | WEBサイト・資料にAnimaWorksを紹介するとき |
-| **kyoka-video-production** | 鏡花TikTok動画素材生成 | fal.ai Web UIでFLUX+Kling動画を手動生成するとき |
+| **kyoka-video-production** | 鏡花TikTok動画素材生成（旧パイプライン・参考用） | fal.ai Web UIでFLUX+Kling動画を手動生成するとき |
+
+> **memory-scene-recreation**（顔写真→思い出シーンAI再現）はグローバルSkillに移動済み。`~/trinitydox-standards/skills/memory-scene-recreation/` を参照。
 
 ## 一覧: AnimaWorks内蔵スキル（Anima自身が使う）
 

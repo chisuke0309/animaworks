@@ -1,9 +1,6 @@
 ---
 name: animaworks-genre-change
-description: >
-  AnimaWorksのX投稿パイプラインを別ジャンルに切り替えるためのスキル。
-  修正対象ファイルの特定、修正手順、確認チェックリストを提供する。
-  コード変更は不要。テキスト文書（injection.md, cron.md, knowledge/*.md）のみ修正。
+description: "Provides target file identification, modification steps, and verification checklists for switching the AnimaWorks X posting pipeline to a different content genre. Only text documents (injection.md, cron.md, knowledge/*.md) are modified — no code changes required. Use when changing the content theme of an X posting pipeline or replacing knowledge for a new account or brand."
 metadata:
   model: sonnet
 risk: low

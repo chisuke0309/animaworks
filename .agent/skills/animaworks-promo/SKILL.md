@@ -1,9 +1,6 @@
 ---
 name: animaworks-promo
-description: >
-  AnimaWorksの成果・機能・アーキテクチャをプロモーションコンテンツとして構成するためのスキル。
-  WEBサイト（trinity-dox）のコンテンツ生成に使用。
-  技術的な正確性を保ちつつ、ビジネス価値を訴求する形でまとめてある。
+description: "Structures AnimaWorks achievements, features, and architecture into promotional content for the trinity-dox website, presentations, and client-facing materials. Use when creating AnimaWorks introduction pages, blog articles, or case study materials that communicate AI agent value to business audiences."
 metadata:
   model: sonnet
 risk: low

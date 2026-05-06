@@ -1,10 +1,6 @@
 ---
 name: kyoka-video-production
-description: >
-  AIキャラクター「鏡花（Kyoka）」のTikTok動画素材を fal.ai Web UIで
-  手動生成するための手順とノウハウ。FLUX+LoRAで画像を生成し、
-  Kling v2.5 Turbo Pro で動画化する2段パイプライン。
-  「Kyoka」「鏡花」「TikTok動画」「fal.ai」「LoRA」「動画素材生成」等の作業で使用。
+description: "Generates TikTok video assets for the AI character Kyoka using a two-stage pipeline: FLUX+LoRA image generation followed by Kling v2.5 Turbo Pro video conversion via fal.ai Web UI. Use when creating new Kyoka video materials, adding variation to the asset pool, or referencing prompt design and motion patterns."
 metadata:
   model: sonnet
 risk: low
