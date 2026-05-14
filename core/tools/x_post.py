@@ -834,14 +834,14 @@ def update_engagement(anima_dir: str) -> dict[str, Any]:
         if not line.startswith("|"):
             continue
         cols = [c.strip() for c in line.split("|")]
-        # Expected: ['', '日付', 'トピック要約', 'tweet_id', 'likes', 'RTs', 'impressions', '']
-        if len(cols) < 8:
+        # Expected: ['', '日付', 'ジャンル', 'トピック要約', 'tweet_id', 'likes', 'RTs', 'impressions', '']
+        if len(cols) < 9:
             continue
-        tid = cols[3]
+        tid = cols[4]
         if not tid.isdigit():
             continue
         # Check if any metric is still "-" or "—" (em-dash written by LLM agents)
-        if any(c in ("-", "—") for c in (cols[4], cols[5], cols[6])):
+        if any(c in ("-", "—") for c in (cols[5], cols[6], cols[7])):
             ids_to_fetch.append(tid)
             row_indices[tid] = i
 
@@ -864,9 +864,9 @@ def update_engagement(anima_dir: str) -> dict[str, Any]:
         if idx is None:
             continue
         cols = [c.strip() for c in lines[idx].split("|")]
-        cols[4] = str(m.get("likes", 0))
-        cols[5] = str(m.get("retweets", 0))
-        cols[6] = str(m.get("impressions", 0))
+        cols[5] = str(m.get("likes", 0))
+        cols[6] = str(m.get("retweets", 0))
+        cols[7] = str(m.get("impressions", 0))
         lines[idx] = "| " + " | ".join(cols[1:-1]) + " |"
         updated_count += 1
 
