@@ -66,6 +66,9 @@ def approve_post(post_id: str) -> dict[str, Any]:
         return {"success": True, "id": post_id, "message": "Already approved"}
 
     data["status"] = "approved"
+    if data.get("gate") == "pending":
+        data["gate"] = "auto_approved"
+        data["gate_reason"] = "manually approved via API"
     fp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info("Pending post approved: %s", post_id)
     return {"success": True, "id": post_id, "message": "Post approved — will be posted at next cron run"}

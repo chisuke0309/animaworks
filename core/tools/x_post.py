@@ -22,6 +22,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 import urllib.parse
 import uuid
@@ -517,6 +518,12 @@ def _score_post(text: str) -> dict:
 # ── Save pending post ─────────────────────────────────────────
 
 
+def _extract_blocker_id(gate_reason: str) -> str:
+    """gate_reason から参照先投稿IDを抽出する（phantom blocker 解消用）。"""
+    m = re.search(r"[（(](\d{8}T\d{6}_\w+)[）)]", gate_reason)
+    return m.group(1) if m else ""
+
+
 def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: str | None = None) -> dict:
     """Save a tweet draft for human approval.
 
@@ -534,6 +541,16 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
     """
     _ensure_pending_dir()
     text = _strip_markdown(text)
+
+    # scheduled_for: 次回の slot 投稿日時（当日の時刻を過ぎていれば翌日）
+    _jst = timezone(timedelta(hours=9))
+    _now_sf = datetime.now(_jst)
+    _SLOT_HOURS = {"morning": 8, "evening": 17}
+    _slot_hour = _SLOT_HOURS.get(slot, 12)
+    _candidate = _now_sf.replace(hour=_slot_hour, minute=0, second=0, microsecond=0)
+    if _candidate <= _now_sf:
+        _candidate = _candidate + timedelta(days=1)
+    scheduled_for = _candidate.isoformat()
 
     # ── Dedup: check if identical or near-identical content already exists ──
     try:
@@ -571,7 +588,12 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
     try:
         for _existing_file in sorted(PENDING_DIR.glob("*.json")):
             _existing = json.loads(_existing_file.read_text(encoding="utf-8"))
-            if _existing.get("status") == "approved" and _existing.get("slot") == slot:
+            _existing_sf = _existing.get("scheduled_for", "")
+            _same_date = (
+                _existing_sf[:10] == scheduled_for[:10]
+                if _existing_sf else True  # 旧ファイルは conservative（conflict扱い）
+            )
+            if _existing.get("status") == "approved" and _existing.get("slot") == slot and _same_date:
                 _has_approved_in_slot = True
                 _conflict_id = _existing.get("id", "?")
                 logger.warning(
@@ -623,6 +645,7 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
         "slot": slot,
         "anima": anima,
         "created_at": now.isoformat(),
+        "scheduled_for": scheduled_for,
         "status": status,
         "char_count": len(text),
         "quality_score": scoring["overall"],
@@ -693,12 +716,29 @@ def execute_pending_posts(slot: str, anima_dir: str = "") -> dict:
 
     # Collect all approved posts for this slot, sorted oldest-first (filename is timestamp-prefixed)
     approved_files = []
+    _today_str = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
     for filepath in sorted(PENDING_DIR.glob("*.json")):
         try:
             draft = json.loads(filepath.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
-        if draft.get("status") == "approved" and draft.get("slot") == slot:
+        if draft.get("slot") != slot:
+            continue
+
+        # Phantom blocker 解消: blocker が消えていれば gate を auto_approved に昇格
+        if draft.get("status") == "approved" and draft.get("gate") == "pending":
+            _ref_id = _extract_blocker_id(draft.get("gate_reason", ""))
+            if _ref_id and not (PENDING_DIR / f"{_ref_id}.json").exists():
+                draft["gate"] = "auto_approved"
+                draft["gate_reason"] = f"blocker {_ref_id} removed — auto-promoted"
+                filepath.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
+                logger.info("Gate promoted: %s (blocker %s no longer exists)", draft["id"], _ref_id)
+
+        # scheduled_for フィルタ: 旧ファイル（フィールドなし）は日付不問で対象
+        _sf = draft.get("scheduled_for", "")
+        _due = (_sf[:10] <= _today_str) if _sf else True
+
+        if draft.get("status") == "approved" and draft.get("gate") == "auto_approved" and _due:
             approved_files.append((filepath, draft))
 
     if len(approved_files) > 1:
