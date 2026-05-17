@@ -82,6 +82,13 @@ VALID_TOOL_NAMES = {
     "tiktok_analytics",
     # tiktok_analytics のアクション名（dispatch経由で呼ぶ）
     "tiktok_scrape_engagement", "tiktok_get_performance", "tiktok_record_engagement",
+    "tiktok_record_post", "tiktok_weekly_report",
+    # tiktok_content のアクション名
+    "tiktok_save_draft", "tiktok_list_drafts", "tiktok_plan_carousel",
+    # tiktok 画像・品質
+    "tiktok_generate_carousel_images",
+    "tiktok_overlay_judge", "tiktok_judge_overlay_texts",
+    "tiktok_verify_image_freshness",
     # crowdworks
     "crowdworks_search",
 }
@@ -275,6 +282,10 @@ def check_tool_names(files: list[tuple[str, str, str]], report: LintReport):
                     "search_jobs", "query_database", "update_page", "create_page",
                     "client_name", "budget_max", "budget_type", "posted_at",
                     "database_id", "page_id", "score_breakdown",
+                    # tiktok_verify_image_freshness のパラメータ・戻り値フィールド名
+                    "draft_id", "stale_slides",
+                    # tiktok_judge_overlay_texts のパラメータ名
+                    "factual_claims", "source_urls",
                 }
                 if name in NON_TOOL_NAMES:
                     continue

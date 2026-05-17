@@ -1,0 +1,52 @@
+# tama CTA-本体整合 回帰テスト
+# 2026-05-08 chisuke 指摘: スライド5に「番号でコメント」とあるのに本体に①②③が無かった
+
+description: "tama: 番号参照CTAなら本体に①②③が実在すること"
+
+vars:
+  topic: "今週のAIニュースまとめ — 3社が同じ週に動いた"
+  facts: |
+    ①Anthropic: SpaceXとのコンピュート提携でClaude API/Codeの上限2倍化
+    ②Google: Gemini Deep Research Max リリース、自律リサーチで可視化
+    ③OpenAI: GPT-5.5 Instant でハルシネーション52.5%減
+
+assert:
+  # 1. JSON 配列として 5 要素返ること（マークダウンコードフェンスは剥がす）
+  - type: javascript
+    value: |
+      const stripped = output.replace(/^\s*```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+      try {
+        const arr = JSON.parse(stripped);
+        if (Array.isArray(arr) && arr.length === 5) return { pass: true, score: 1, reason: 'OK' };
+        return { pass: false, score: 0, reason: `5要素の配列でない: length=${Array.isArray(arr) ? arr.length : 'not-array'}` };
+      } catch (e) {
+        return { pass: false, score: 0, reason: `JSON parse失敗: ${e.message}` };
+      }
+
+  # 2. CTA-本体整合: 5枚目に「番号」を含むなら、1〜4枚に①②③が実在すること
+  - type: javascript
+    value: |
+      const stripped = output.replace(/^\s*```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+      const arr = JSON.parse(stripped);
+      const slide5 = arr[4] || '';
+      const usesNumberCTA = /番号で|①.*②.*③|どれ\?|どれです?か/.test(slide5);
+      if (!usesNumberCTA) return { pass: true, score: 1, reason: '番号CTAではないため対象外' };
+      const body = arr.slice(0, 4).join('\n');
+      const hasMarkers = /①/.test(body) && /②/.test(body) && /③/.test(body);
+      if (hasMarkers) return { pass: true, score: 1, reason: 'CTA-本体整合OK' };
+      return { pass: false, score: 0, reason: `スライド5は番号CTA "${slide5}" だが本体に①②③が揃っていない（5/8失敗パターン）` };
+
+  # 3. 各スライド20〜30文字、最低3行
+  - type: javascript
+    value: |
+      const stripped = output.replace(/^\s*```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+      const arr = JSON.parse(stripped);
+      const fails = [];
+      arr.forEach((s, i) => {
+        const lines = s.split(/\\n|\n/).filter(l => l.length > 0);
+        const len = s.replace(/\\n/g, '').replace(/\n/g, '').length;
+        if (len < 20 || len > 30) fails.push(`スライド${i+1}: ${len}文字違反`);
+        if (lines.length < 3) fails.push(`スライド${i+1}: ${lines.length}行違反`);
+      });
+      if (fails.length === 0) return { pass: true, score: 1, reason: '文字数・行数OK' };
+      return { pass: false, score: 0, reason: fails.join(' | ') };

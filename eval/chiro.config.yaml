@@ -1,0 +1,13 @@
+description: "chiro regression — 事実紐付けミス・URL捏造・要約汎用語化の検出"
+
+providers:
+  - id: anthropic:messages:claude-sonnet-4-6
+    config:
+      max_tokens: 4096
+      temperature: 0.2
+
+prompts:
+  - file://prompts/chiro_summarize.txt
+
+tests:
+  - file://tests/chiro_fact_check.yaml

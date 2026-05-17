@@ -1,0 +1,15 @@
+description: "tama regression — CTA-本体整合・宙吊り表現の検出"
+
+providers:
+  - id: anthropic:messages:claude-sonnet-4-6
+    config:
+      max_tokens: 4096
+      temperature: 0.2
+
+prompts:
+  - file://prompts/tama_overlay.txt
+
+tests:
+  - file://tests/tama_cta_alignment.yaml
+  - file://tests/tama_dangling_phrase.yaml
+  - file://tests/tama_rubric_quality.yaml

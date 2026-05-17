@@ -319,7 +319,7 @@ cicchi の5段テンプレが末尾で生成する `[CONTRACT]...[/CONTRACT]` �
 
 ### ⚠️ heartbeat_end summary の regex 注意
 
-`_execute_heartbeat_cycle()` L470-475 の regex は `## Observe|Plan|Execute|Verify|Reflect|Contract` ヘッダを全て剥がす設計。新しいフェーズヘッダを追加するなら必ずこの regex を拡張すること。怠ると verbose 出力が episodes → RAG → 翌日プロンプト と自己増殖するフィードバックループが発動する（MEMORY.md 参照）。
+`_execute_heartbeat_cycle()` L470-475 の regex は `## Observe|Plan|Execute|Verify|Doubt|Reflect|Contract` ヘッダを全て剥がす設計。新しいフェーズヘッダを追加するなら必ずこの regex を拡張すること。怠ると verbose 出力が episodes → RAG → 翌日プロンプト と自己増殖するフィードバックループが発動する（MEMORY.md 参照）。
 
 ## スキル運用ルール（AnimaWorks固有）
 

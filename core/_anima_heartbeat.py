@@ -43,21 +43,22 @@ _MIN_CONTRACT_LENGTH = 8
 # ── Feedback-loop sanitizer for heartbeat output ────────────
 #
 # The cicchi 5-stage template produces ``## Observe / Plan / Execute /
-# Verify / Reflect`` (optionally ``+ Contract``) section headers. LLMs also
-# routinely emit variants like ``### Observe``, ``## 🔎 Observe``, ``## ✅
-# Plan（計画）`` etc. If any of these slip into heartbeat_end summaries or
-# episode entries they re-enter the next prompt via RAG / heartbeat_history
-# and the model starts mimicking its own scaffold indefinitely (MEMORY.md).
+# Verify / Doubt / Reflect`` (optionally ``+ Contract``) section headers.
+# LLMs also routinely emit variants like ``### Observe``, ``## 🔎 Observe``,
+# ``## ✅ Plan（計画）`` etc. If any of these slip into heartbeat_end
+# summaries or episode entries they re-enter the next prompt via RAG /
+# heartbeat_history and the model starts mimicking its own scaffold
+# indefinitely (MEMORY.md).
 #
 # The pattern below matches any markdown heading (``#`` up to ``####``,
 # optionally followed by emoji / CJK punctuation / spaces) where one of the
-# six phase names appears on the same line, and deletes that heading plus
+# seven phase names appears on the same line, and deletes that heading plus
 # all subsequent content. It is deliberately broader than strict
 # ``## Observe`` to tolerate model drift.
 _RE_HB_PHASE_HEADER = re.compile(
     r"""
     ^\s*\#{1,4}\s*[^\n]*?            # any heading up to h4 + arbitrary prefix
-    (?:Observe|Plan|Execute|Verify|Reflect|Contract)
+    (?:Observe|Plan|Execute|Verify|Doubt|Reflect|Contract)
     \b.*                             # everything after the header
     """,
     re.DOTALL | re.IGNORECASE | re.MULTILINE | re.VERBOSE,
@@ -66,7 +67,7 @@ _RE_HB_PHASE_HEADER = re.compile(
 # Fallback heading patterns without the Markdown ``#``, e.g. bold-only
 # headings like ``**Observe（観察）**`` that Anthropic models sometimes emit.
 _RE_HB_BOLD_PHASE = re.compile(
-    r"^\s*\*\*\s*(?:Observe|Plan|Execute|Verify|Reflect|Contract)\b.*",
+    r"^\s*\*\*\s*(?:Observe|Plan|Execute|Verify|Doubt|Reflect|Contract)\b.*",
     re.DOTALL | re.IGNORECASE | re.MULTILINE,
 )
 

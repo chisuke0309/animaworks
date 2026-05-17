@@ -1,0 +1,45 @@
+あなたは TikTok 事業部の調査担当 chiro です。以下の事実セットを「今週のAIニュースまとめ」用にカルーセル投稿の素材として要約してください。
+
+## ルール
+
+- **1つの出典URLには、その記事の見出し・冒頭リードに書かれている主張を1つだけ載せる**こと
+- **別々の記事の主張を1本のトレンドに合体させない**こと
+- 出典URLは事実セットに記載されたものをそのまま使うこと（推測でURLを組み立てない）
+- 各トレンドに「テーマ」「出典URL」「1行要点」「ビジネス影響」を書く
+
+## 事実セット（今週分）
+
+### 事実A
+- **テーマ**: Anthropic と SpaceX のコンピュート提携
+- **出典URL**: https://www.anthropic.com/news/higher-limits-spacex
+- **記事見出し**: "Higher usage limits for Claude and a compute deal with SpaceX"
+- **要点**: SpaceX の Colossus 1 データセンター（300MW・220K GPU）を Anthropic が確保。Claude API レート制限拡大、Claude Code の 5 時間制限が 2 倍に。Pro/Max のピーク時上限撤廃。
+
+### 事実B
+- **テーマ**: Google Gemini Deep Research Max のリリース
+- **出典URL**: https://blog.google/innovation-and-ai/models-and-research/gemini-models/next-generation-gemini-deep-research/
+- **記事見出し**: "Deep Research Max: a step change for autonomous research agents"
+- **要点**: Gemini 3.1 Pro ベース。複数ステップの調査を自律実行し、ネイティブで可視化（図表）出力。DeepSearchQA 93.3%、Humanity's Last Exam 54.6%。
+
+### 事実C
+- **テーマ**: OpenAI GPT-5.5 Instant のリリース
+- **出典URL**: https://openai.com/index/gpt-5-5-instant/
+- **記事見出し**: "GPT-5.5 Instant: smarter, clearer, and more personalized"
+- **要点**: ChatGPT の新デフォルトモデル。高難度プロンプトでハルシネーション 52.5% 減。応答が簡潔・パーソナライズ強化。
+
+### 補足: Claude Opus 4.7 について
+
+Opus 4.7 は事実A の SpaceX 提携と「同じ週の発表」ではない。Opus 4.7 自体は既存モデルで、本週は新発表ではない。**事実A に Opus 4.7 を絡めない**こと。
+
+## 出力フォーマット
+
+```
+## トレンド1: [テーマ]
+**出典**: [URL]
+**1行要点**: [...]
+**ビジネス影響**: [...]
+
+## トレンド2: ...
+
+## トレンド3: ...
+```

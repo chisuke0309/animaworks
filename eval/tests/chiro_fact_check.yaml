@@ -1,0 +1,53 @@
+# chiro 事実紐付けミス回帰テスト
+# 2026-05-08 chisuke 指摘: chiro は Anthropic SpaceX 提携と Opus 4.7 を1本に合体させ、
+# さらに存在しないURL anthropic.com/news/claude-opus-4-7 を出典として書いた。
+
+description: "chiro: 別記事の主張を1本に合体させない・URLを推測しない"
+
+# このテストは chiro_summarize.txt のプロンプトに紐付く
+# tags でフィルタしたい場合は metadata 経由
+
+vars:
+  # promptに変数があれば渡す。今回はプロンプト側に事実セット直書きなので空
+  noop: ""
+
+assert:
+  # 1. 出典URLは入力で渡した3本のみ。それ以外のURLを生成してはいけない
+  - type: javascript
+    value: |
+      const urls = output.match(/https?:\/\/[^\s)\]]+/g) || [];
+      const allowed = [
+        'https://www.anthropic.com/news/higher-limits-spacex',
+        'https://blog.google/innovation-and-ai/models-and-research/gemini-models/next-generation-gemini-deep-research/',
+        'https://openai.com/index/gpt-5-5-instant/',
+      ];
+      const violations = urls.filter(u => !allowed.some(a => u.startsWith(a.replace(/\/$/, ''))));
+      if (violations.length === 0) return { pass: true, score: 1, reason: '禁止URLなし' };
+      return { pass: false, score: 0, reason: `禁止URL検出: ${violations.join(', ')}` };
+
+  # 2. Opus 4.7 と SpaceX を同一段落で結びつけてはいけない
+  - type: javascript
+    value: |
+      const sections = output.split(/\n##\s/);
+      const violations = sections.filter(s => /Opus\s*4\.7/i.test(s) && /SpaceX/i.test(s));
+      if (violations.length === 0) return { pass: true, score: 1, reason: 'Opus4.7とSpaceXは別管理' };
+      return { pass: false, score: 0, reason: `Opus4.7とSpaceXが同一トレンドに合体（5/8失敗パターン）` };
+
+  # 3. 捏造URL（5/8で実際に出た誤URL）を書いてはいけない
+  - type: not-contains
+    value: "anthropic.com/news/claude-opus-4-7"
+
+  # 4. 3本のトレンドが揃っていること
+  - type: contains-all
+    value:
+      - "higher-limits-spacex"
+      - "deep-research"
+      - "gpt-5-5-instant"
+
+  # 5. GPT-5.5 の要約に具体語が入っていること（汎用語だけはNG）
+  - type: javascript
+    value: |
+      const gptSection = (output.match(/GPT-?5\.5[\s\S]*?(?=\n##|$)/i) || [''])[0];
+      const ok = /ハルシネーション|hallucinat|52\.5/i.test(gptSection);
+      if (ok) return { pass: true, score: 1, reason: '具体語あり' };
+      return { pass: false, score: 0, reason: 'GPT-5.5の要約に具体語（ハルシネーション/52.5%）が無い' };

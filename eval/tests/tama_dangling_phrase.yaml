@@ -1,0 +1,43 @@
+# tama 宙吊り表現 回帰テスト
+# 2026-05-08 chisuke 指摘: 「Opus4.7発表 / 週末に見返して」のように
+# 動詞単独・代名詞単独で終わるスライドが意味不明だった
+
+description: "tama: 各スライド末尾が動詞単独・代名詞単独で終わらないこと"
+
+vars:
+  topic: "Claude Code を今週から使うべき5つの理由"
+  facts: |
+    Claude Codeはターミナル統合・MCPサポート・差分プレビュー・テスト自動実行・Sonnet/Opus切替が可能
+    開発者の作業時間を半分以下にできる事例が多い
+
+assert:
+  - type: javascript
+    value: |
+      const stripped = output.replace(/^\s*```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+      let arr;
+      try { arr = JSON.parse(stripped); } catch (e) { return { pass: false, score: 0, reason: `JSON parse失敗: ${e.message}` }; }
+      const danglingPatterns = [
+        /^見返して。?$/, /^保存して。?$/, /^試して。?$/, /^確認して。?$/, /^使って。?$/,
+        /^これ。?$/, /^それ。?$/, /^あれ。?$/, /^この。?$/, /^その。?$/,
+      ];
+      const fails = [];
+      arr.forEach((s, i) => {
+        const lines = s.split(/\\n|\n/).filter(l => l.trim().length > 0);
+        const last = (lines[lines.length - 1] || '').trim();
+        if (danglingPatterns.some(p => p.test(last))) {
+          fails.push(`スライド${i+1}末尾「${last}」が宙吊り (5/8失敗パターン)`);
+        }
+      });
+      if (fails.length === 0) return { pass: true, score: 1, reason: '宙吊り表現なし' };
+      return { pass: false, score: 0, reason: fails.join(' | ') };
+
+  # 2枚目に「保存」が含まれている場合、保存対象が明示されているか
+  - type: javascript
+    value: |
+      const stripped = output.replace(/^\s*```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+      const arr = JSON.parse(stripped);
+      const slide2 = arr[1] || '';
+      if (!/保存/.test(slide2)) return { pass: true, score: 1, reason: '2枚目に保存語なし=対象外' };
+      const hasContext = /会議|月曜|来週|あとで|チーム|同僚|忘れ|比較|見比べ|まとめ|チェック|手順/.test(slide2);
+      if (hasContext) return { pass: true, score: 1, reason: '保存動機の文脈あり' };
+      return { pass: false, score: 0, reason: `スライド2に「保存」があるが具体的動機が同じスライド内に書かれていない: "${slide2}"` };
