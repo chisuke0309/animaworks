@@ -542,7 +542,8 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
     _ensure_pending_dir()
     text = _strip_markdown(text)
 
-    # scheduled_for: 次回の slot 投稿日時（当日の時刻を過ぎていれば翌日）
+    # scheduled_for: 次回の slot 投稿日時。当日の時刻を過ぎていれば翌日。
+    # さらに同スロットで approved 済みのファイルがある日付を避けて前倒しする。
     _jst = timezone(timedelta(hours=9))
     _now_sf = datetime.now(_jst)
     _SLOT_HOURS = {"morning": 8, "evening": 17}
@@ -550,6 +551,23 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
     _candidate = _now_sf.replace(hour=_slot_hour, minute=0, second=0, microsecond=0)
     if _candidate <= _now_sf:
         _candidate = _candidate + timedelta(days=1)
+
+    # 既存 approved ファイルの scheduled_for と衝突する日付を避ける（最大7日先まで）
+    try:
+        _approved_dates: set[str] = set()
+        for _ef in PENDING_DIR.glob("*.json"):
+            _ed = json.loads(_ef.read_text(encoding="utf-8"))
+            if _ed.get("status") == "approved" and _ed.get("slot") == slot:
+                _sf_val = _ed.get("scheduled_for", "")
+                if _sf_val:
+                    _approved_dates.add(_sf_val[:10])
+        for _ in range(7):
+            if _candidate.strftime("%Y-%m-%d") not in _approved_dates:
+                break
+            _candidate = _candidate + timedelta(days=1)
+    except Exception:
+        logger.debug("scheduled_for conflict scan failed, using initial candidate", exc_info=True)
+
     scheduled_for = _candidate.isoformat()
 
     # ── Dedup: check if identical or near-identical content already exists ──
@@ -581,8 +599,8 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
     except Exception:
         logger.debug("Dedup check failed, proceeding with save", exc_info=True)
 
-    # ── Approved-slot conflict: force 'pending' if an approved post already exists for this slot ──
-    # Prevents queue backup where multiple approved posts accumulate and only the oldest ever runs.
+    # ── Approved-slot conflict check (scheduled_for ベースで再確認) ──
+    # scheduled_for 計算時点で衝突を避けているため、ここでは念のための確認のみ。
     _has_approved_in_slot = False
     _conflict_id = ""
     try:
