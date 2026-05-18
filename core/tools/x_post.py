@@ -671,7 +671,7 @@ def save_pending_post(text: str, slot: str, anima: str = "unknown", image_path: 
         "max_similarity": scoring["max_similarity"],
         "gate": gate,
         "gate_reason": scoring["gate_reason"],
-        "image_path": image_path or "",
+        "image_path": image_path if (image_path and Path(image_path).exists()) else None,
     }
 
     filepath = PENDING_DIR / filename
